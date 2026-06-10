@@ -147,8 +147,8 @@ order by l.effective_deadline nulls last;
 create view v_progress as
 select p.id,
        count(c.id) filter (where c.state = 'done') as done_children,
-       count(c.id)                                  as total_children,
-       max(c.done_at)                               as derived_done_at
+       count(c.id) filter (where c.state <> 'cancelled') as total_children,
+       max(c.done_at) filter (where c.state = 'done') as derived_done_at
 from tasks p
 join tasks c on c.parent_id = p.id
 group by p.id;

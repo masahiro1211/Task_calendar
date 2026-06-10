@@ -8,19 +8,18 @@
 1. **導出可能な状態をカラムとして追加しない。** 「未配置」「配置済み」「親の完了」等を
    保存したくなったら、それはビュー(`v_pool` 等)の仕事。statusカラムの追加提案は禁止。
 2. **schema.sql は生SQLのまま正本とする。** ビュー・トリガ・partial indexを含むため、
-   Drizzleスキーマ定義に翻訳して二重管理しない。drizzle-kitのカスタムSQLマイグレーション
-   として適用し、Drizzle側は型生成・クエリ用途に留める。
+   ORMスキーマ定義に翻訳して二重管理しない。DBアクセスは `postgres` のraw SQLに統一する。
 3. **DBへの書き込みはservice層1本に集約。** 不変条件(design-doc.md §3)はここで検証する。
-   APIルートやUIから直接Drizzleでinsert/updateしない。
+   Server ActionsやUIから直接insert/updateしない。
 4. **非要件(design-doc.md §6)を実装しない。** 双方向同期・自前push通知・リアルタイム
    競合解決は明示的にスコープ外。提案も不要。
 
 ## 実装順序(M1)
 
-1. マイグレーション適用 + Drizzle設定
+1. マイグレーション適用 + raw SQL接続設定
 2. service層 + **4つの不変条件のユニットテストを先に書く**
    (Lの葉は配置不可 / 未来ブロック保有タスクへの子追加禁止 / doneは葉のみ / 範囲整合)
-3. APIルート
+3. Server Actions
 4. UI(ツリー → プール → カレンダー配置の順)
 
 ## 既知の罠

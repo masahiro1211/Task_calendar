@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: task_calendar_test
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d task_calendar_test"]
       interval: 5s

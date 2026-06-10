@@ -100,6 +100,24 @@ maybeDescribe("task service", () => {
     ).resolves.toHaveLength(2);
   });
 
+  it("rejects child additions to done and cancelled parents", async () => {
+    const doneParent = await service.createTask({ title: "done parent", size: "L" });
+    await service.markTaskDone(doneParent.id);
+
+    const cancelledParent = await service.createTask({ title: "cancelled parent", size: "L" });
+    await service.cancelTask(cancelledParent.id);
+
+    for (const parentId of [doneParent.id, cancelledParent.id]) {
+      await expect(
+        service.createTask({ parentId, title: "child", size: "S" })
+      ).rejects.toThrow(TaskServiceError);
+
+      await expect(
+        service.splitTask(parentId, [{ title: "child", size: "S" }])
+      ).rejects.toThrow(TaskServiceError);
+    }
+  });
+
   it("rejects done for non-leaves and permits done for leaves", async () => {
     const parent = await service.createTask({ title: "parent", size: "L" });
     const child = await service.createTask({ parentId: parent.id, title: "child", size: "S" });
@@ -110,6 +128,17 @@ maybeDescribe("task service", () => {
 
     expect(doneChild.state).toBe("done");
     expect(doneChild.doneAt?.toISOString()).toBe(fixedNow.toISOString());
+  });
+
+  it("rejects done for non-open leaves", async () => {
+    const doneTask = await service.createTask({ title: "done", size: "S" });
+    await service.markTaskDone(doneTask.id);
+
+    const cancelledTask = await service.createTask({ title: "cancelled", size: "S" });
+    await service.cancelTask(cancelledTask.id);
+
+    await expect(service.markTaskDone(doneTask.id)).rejects.toThrow(TaskServiceError);
+    await expect(service.markTaskDone(cancelledTask.id)).rejects.toThrow(TaskServiceError);
   });
 
   it("rejects block creation and updates with end_at <= start_at", async () => {
@@ -156,5 +185,138 @@ maybeDescribe("task service", () => {
     });
 
     expect(moved.rescheduledCount).toBe(1);
+  });
+
+  it("updates only editable task fields", async () => {
+    const task = await service.createTask({
+      title: "original",
+      bodyMd: "body",
+      deadline: "2026-07-01",
+      estimateMin: 30,
+      size: "M"
+    });
+    await service.markTaskDone(task.id);
+
+    const updated = await service.updateTask(task.id, {
+      title: "updated",
+      bodyMd: "new body",
+      deadline: null,
+      estimateMin: 45,
+      size: "S"
+    });
+
+    expect(updated).toMatchObject({
+      id: task.id,
+      parentId: null,
+      title: "updated",
+      bodyMd: "new body",
+      deadline: null,
+      estimateMin: 45,
+      size: "S",
+      state: "done",
+      sortOrder: 0
+    });
+    expect(updated.doneAt?.toISOString()).toBe(fixedNow.toISOString());
+  });
+
+  it("rejects size changes to L for future-blocked tasks but allows past-only blocks", async () => {
+    const futureBlocked = await service.createTask({ title: "future blocked", size: "M" });
+    await service.createBlock({
+      taskId: futureBlocked.id,
+      startAt: "2026-06-10T09:00:00Z",
+      endAt: "2026-06-10T10:00:00Z"
+    });
+
+    await expect(service.updateTask(futureBlocked.id, { size: "L" })).rejects.toThrow(
+      TaskServiceError
+    );
+
+    const pastBlocked = await service.createTask({ title: "past blocked", size: "M" });
+    await service.createBlock({
+      taskId: pastBlocked.id,
+      startAt: "2026-06-09T09:00:00Z",
+      endAt: "2026-06-09T10:00:00Z"
+    });
+
+    await expect(service.updateTask(pastBlocked.id, { size: "L" })).resolves.toMatchObject({
+      id: pastBlocked.id,
+      size: "L"
+    });
+  });
+
+  it("reopens done tasks and rejects open or cancelled tasks", async () => {
+    const doneTask = await service.createTask({ title: "done", size: "S" });
+    await service.markTaskDone(doneTask.id);
+
+    await expect(service.reopenTask(doneTask.id)).resolves.toMatchObject({
+      id: doneTask.id,
+      state: "open",
+      doneAt: null
+    });
+
+    await expect(service.reopenTask(doneTask.id)).rejects.toThrow(TaskServiceError);
+
+    const cancelledTask = await service.createTask({ title: "cancelled", size: "S" });
+    await service.cancelTask(cancelledTask.id);
+
+    await expect(service.reopenTask(cancelledTask.id)).rejects.toThrow(TaskServiceError);
+  });
+
+  it("cancels only open subtree tasks while preserving done descendants", async () => {
+    const parent = await service.createTask({ title: "parent", size: "L" });
+    const openChild = await service.createTask({
+      parentId: parent.id,
+      title: "open child",
+      size: "M"
+    });
+    const doneChild = await service.createTask({
+      parentId: parent.id,
+      title: "done child",
+      size: "S"
+    });
+    await service.markTaskDone(doneChild.id);
+
+    const result = await service.cancelTask(parent.id);
+
+    expect(result.cancelledCount).toBe(2);
+
+    const rows = await sql<{ id: string; state: string; done_at: Date | null }[]>`
+      select id, state::text as state, done_at
+      from tasks
+      where id in (${parent.id}, ${openChild.id}, ${doneChild.id})
+      order by title
+    `;
+
+    expect(rows).toEqual([
+      { id: doneChild.id, state: "done", done_at: fixedNow },
+      { id: openChild.id, state: "cancelled", done_at: null },
+      { id: parent.id, state: "cancelled", done_at: null }
+    ]);
+  });
+
+  it("deletes only future blocks when cancelling a subtree", async () => {
+    const parent = await service.createTask({ title: "parent", size: "L" });
+    const child = await service.createTask({ parentId: parent.id, title: "child", size: "M" });
+    const pastBlock = await service.createBlock({
+      taskId: child.id,
+      startAt: "2026-06-09T09:00:00Z",
+      endAt: "2026-06-09T10:00:00Z"
+    });
+    const futureBlock = await service.createBlock({
+      taskId: child.id,
+      startAt: "2026-06-10T09:00:00Z",
+      endAt: "2026-06-10T10:00:00Z"
+    });
+
+    const result = await service.cancelTask(parent.id);
+
+    expect(result.deletedFutureBlockCount).toBe(1);
+
+    const blocks = await sql<{ id: string }[]>`
+      select id from blocks order by start_at
+    `;
+
+    expect(blocks.map((block) => block.id)).toEqual([pastBlock.id]);
+    expect(blocks.map((block) => block.id)).not.toContain(futureBlock.id);
   });
 });

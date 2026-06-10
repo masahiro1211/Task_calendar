@@ -117,4 +117,31 @@ maybeDescribe("derived views", () => {
     expect(progress.total_children).toBe("2");
     expect(progress.derived_done_at.toISOString()).toBe("2026-02-03T10:30:00.000Z");
   });
+
+  it("v_progress excludes cancelled children from completion totals", async () => {
+    await sql`
+      insert into tasks (id, parent_id, title, size, state, done_at)
+      values
+        ('00000000-0000-4000-8000-000000000401', null, 'parent', 'L', 'open', null),
+        ('00000000-0000-4000-8000-000000000402', '00000000-0000-4000-8000-000000000401', 'done child 1', 'S', 'done', '2026-02-01T09:00:00Z'),
+        ('00000000-0000-4000-8000-000000000403', '00000000-0000-4000-8000-000000000401', 'done child 2', 'S', 'done', '2026-02-02T09:00:00Z'),
+        ('00000000-0000-4000-8000-000000000404', '00000000-0000-4000-8000-000000000401', 'done child 3', 'S', 'done', '2026-02-03T09:00:00Z'),
+        ('00000000-0000-4000-8000-000000000405', '00000000-0000-4000-8000-000000000401', 'done child 4', 'S', 'done', '2026-02-04T09:00:00Z'),
+        ('00000000-0000-4000-8000-000000000406', '00000000-0000-4000-8000-000000000401', 'cancelled child', 'S', 'cancelled', null)
+    `;
+
+    const [progress] = await sql<{
+      done_children: string;
+      total_children: string;
+      derived_done_at: Date;
+    }[]>`
+      select done_children, total_children, derived_done_at
+      from v_progress
+      where id = '00000000-0000-4000-8000-000000000401'
+    `;
+
+    expect(progress.done_children).toBe("4");
+    expect(progress.total_children).toBe("4");
+    expect(progress.derived_done_at.toISOString()).toBe("2026-02-04T09:00:00.000Z");
+  });
 });

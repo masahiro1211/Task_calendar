@@ -12,7 +12,9 @@
     "db:check-schema": "tsx scripts/check-schema-hash.ts"
   },
   "dependencies": {
-    "drizzle-orm": "^0.39.0",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
+    "@fullcalendar/timegrid": "^6.1.20",
     "next": "^15.1.6",
     "postgres": "^3.4.5",
     "react": "^19.0.0",

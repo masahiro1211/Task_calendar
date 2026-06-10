@@ -41,7 +41,7 @@ webhookチャンネルは使わない。overlayはアプリ起動時+定期に s
 ### 確定した設計判断
 
 1. **親の完了は完全導出**。全子がdoneなら親はdone扱い(`v_progress`)。親にdone_atは書かない。
-   完了日時が必要なら `max(子のdone_at)` で代用。
+   完了日時が必要なら `max(子のdone_at)` で代用。cancelled の子は進捗の分母から除外する。
 2. **1タスク : Nブロックを許可**。Mタスクを複数セッションに分けて配置できる。
    完了判定はタスク単位。ブロックは時間の予約に徹する。
 3. **未来ブロック(`end_at > now()`)を持つタスクへの子追加(分割)は禁止**。
@@ -98,7 +98,7 @@ DBの宣言的制約では表現できないため、書き込み経路をservic
 ## 5. 技術スタック
 
 - Next.js (App Router) + TypeScript、Vercelデプロイ
-- Postgres(Supabase または Neon)+ Drizzle ORM
+- Postgres(Supabase または Neon)+ `postgres` raw SQL
 - カレンダーUI: FullCalendar(JSライブラリ本体、無料版の週/日ビュー)
 - プール→カレンダーのドラッグ: FullCalendarの external draggable + dnd-kit(ツリー内)
 - Markdown: 保存はプレーンテキスト、表示は react-markdown

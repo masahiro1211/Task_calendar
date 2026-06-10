@@ -6,6 +6,7 @@ type TimestampInput = Date | string;
 type DateInput = Date | string;
 
 export type TaskSize = "L" | "M" | "S";
+export type TaskState = "open" | "done" | "cancelled";
 
 export interface TaskRecord {
   id: string;
@@ -15,7 +16,7 @@ export interface TaskRecord {
   size: TaskSize;
   estimateMin: number | null;
   deadline: string | null;
-  state: "open" | "done" | "cancelled";
+  state: TaskState;
   doneAt: Date | null;
   sortOrder: number;
   createdAt: Date;
@@ -55,6 +56,19 @@ export interface UpdateBlockInput {
   endAt?: TimestampInput;
 }
 
+export interface UpdateTaskInput {
+  title?: string;
+  bodyMd?: string;
+  deadline?: DateInput | null;
+  estimateMin?: number | null;
+  size?: TaskSize;
+}
+
+export interface CancelTaskResult {
+  cancelledCount: number;
+  deletedFutureBlockCount: number;
+}
+
 export class TaskServiceError extends Error {
   constructor(message: string) {
     super(message);
@@ -79,6 +93,40 @@ export function createTaskService({
         ...input,
         parentId: input.parentId ?? null
       });
+    },
+
+    async updateTask(taskId: string, input: UpdateTaskInput) {
+      const existing = await getTask(sql, taskId);
+
+      if (input.size === "L" && existing.size !== "L") {
+        await assertNoFutureBlocks(sql, taskId, now(), "Cannot change a future-blocked task to L.");
+      }
+
+      const [task] = await sql<TaskRow[]>`
+        update tasks
+        set
+          title = ${input.title ?? existing.title},
+          body_md = ${input.bodyMd ?? existing.body_md},
+          deadline = ${input.deadline === undefined ? existing.deadline : input.deadline},
+          estimate_min = ${input.estimateMin === undefined ? existing.estimate_min : input.estimateMin},
+          size = ${input.size ?? existing.size}
+        where id = ${taskId}
+        returning
+          id,
+          parent_id,
+          title,
+          body_md,
+          size::text as size,
+          estimate_min,
+          deadline::text as deadline,
+          state::text as state,
+          done_at,
+          sort_order,
+          created_at,
+          updated_at
+      `;
+
+      return mapTask(task);
     },
 
     async splitTask(parentId: string, children: SplitTaskChildInput[]) {
@@ -181,7 +229,7 @@ export function createTaskService({
     },
 
     async markTaskDone(taskId: string) {
-      await assertLeafTask(sql, taskId);
+      await assertOpenLeafTask(sql, taskId);
 
       const [task] = await sql<TaskRow[]>`
         update tasks
@@ -207,6 +255,75 @@ export function createTaskService({
       }
 
       return mapTask(task);
+    },
+
+    async reopenTask(taskId: string) {
+      const existing = await getTask(sql, taskId);
+
+      if (existing.state !== "done") {
+        throw new TaskServiceError("Only done tasks can be reopened.");
+      }
+
+      const [task] = await sql<TaskRow[]>`
+        update tasks
+        set state = 'open', done_at = null
+        where id = ${taskId}
+        returning
+          id,
+          parent_id,
+          title,
+          body_md,
+          size::text as size,
+          estimate_min,
+          deadline::text as deadline,
+          state::text as state,
+          done_at,
+          sort_order,
+          created_at,
+          updated_at
+      `;
+
+      return mapTask(task);
+    },
+
+    async cancelTask(taskId: string): Promise<CancelTaskResult> {
+      return sql.begin(async (tx) => {
+        await getTask(tx, taskId);
+
+        const deletedBlocks = await tx`
+          with recursive target as (
+            select id from tasks where id = ${taskId}
+            union all
+            select child.id
+            from tasks child
+            join target on child.parent_id = target.id
+          )
+          delete from blocks b
+          using target
+          where b.task_id = target.id
+            and b.end_at > ${now()}
+        `;
+
+        const cancelledTasks = await tx`
+          with recursive target as (
+            select id from tasks where id = ${taskId}
+            union all
+            select child.id
+            from tasks child
+            join target on child.parent_id = target.id
+          )
+          update tasks t
+          set state = 'cancelled'
+          from target
+          where t.id = target.id
+            and t.state = 'open'
+        `;
+
+        return {
+          cancelledCount: cancelledTasks.count,
+          deletedFutureBlockCount: deletedBlocks.count
+        };
+      });
     }
   };
 }
@@ -219,7 +336,7 @@ interface TaskRow {
   size: TaskSize;
   estimate_min: number | null;
   deadline: string | null;
-  state: "open" | "done" | "cancelled";
+  state: TaskState;
   done_at: Date | null;
   sort_order: number;
   created_at: Date;
@@ -298,33 +415,27 @@ async function assertCanCreateBlock(sql: Sql, taskId: string) {
 }
 
 async function assertCanAddChild(sql: Sql, parentId: string, currentTime: Date) {
-  const [task] = await sql<{ id: string }[]>`
-    select id from tasks where id = ${parentId}
-  `;
+  const task = await getTask(sql, parentId, "Parent task not found.");
 
-  if (!task) {
-    throw new TaskServiceError("Parent task not found.");
+  if (task.state !== "open") {
+    throw new TaskServiceError("Children can only be added to open tasks.");
   }
 
-  const [futureBlock] = await sql<{ exists: boolean }[]>`
-    select exists(
-      select 1
-      from blocks
-      where task_id = ${parentId}
-        and end_at > ${currentTime}
-    ) as exists
-  `;
-
-  if (futureBlock.exists) {
-    throw new TaskServiceError("Cannot add children to a task with a future block.");
-  }
+  await assertNoFutureBlocks(
+    sql,
+    parentId,
+    currentTime,
+    "Cannot add children to a task with a future block."
+  );
 }
 
-async function assertLeafTask(sql: Sql, taskId: string) {
-  const [task] = await sql<{ is_leaf: boolean }[]>`
-    select not exists (
-      select 1 from tasks child where child.parent_id = tasks.id
-    ) as is_leaf
+async function assertOpenLeafTask(sql: Sql, taskId: string) {
+  const [task] = await sql<{ state: TaskState; is_leaf: boolean }[]>`
+    select
+      state::text as state,
+      not exists (
+        select 1 from tasks child where child.parent_id = tasks.id
+      ) as is_leaf
     from tasks
     where id = ${taskId}
   `;
@@ -333,8 +444,58 @@ async function assertLeafTask(sql: Sql, taskId: string) {
     throw new TaskServiceError("Task not found.");
   }
 
+  if (task.state !== "open") {
+    throw new TaskServiceError("Only open tasks can be marked done.");
+  }
+
   if (!task.is_leaf) {
     throw new TaskServiceError("Only leaf tasks can be marked done.");
+  }
+}
+
+async function getTask(sql: Sql, taskId: string, notFoundMessage = "Task not found.") {
+  const [task] = await sql<TaskRow[]>`
+    select
+      id,
+      parent_id,
+      title,
+      body_md,
+      size::text as size,
+      estimate_min,
+      deadline::text as deadline,
+      state::text as state,
+      done_at,
+      sort_order,
+      created_at,
+      updated_at
+    from tasks
+    where id = ${taskId}
+  `;
+
+  if (!task) {
+    throw new TaskServiceError(notFoundMessage);
+  }
+
+  return task;
+}
+
+async function assertNoFutureBlocks(
+  sql: Sql,
+  taskId: string,
+  currentTime: Date,
+  message: string
+) {
+  const [futureBlock] = await sql<{ exists: boolean }[]>`
+    select not exists (
+      select 1
+      from blocks
+      where task_id = ${taskId}
+        and end_at > ${currentTime}
+    ) as exists
+  `;
+
+  if (!futureBlock.exists) {
+    throw new TaskServiceError(message);
   }
 }
 

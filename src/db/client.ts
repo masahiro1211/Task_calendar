@@ -1,14 +1,22 @@
-import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 const connectionString = process.env.DATABASE_URL;
+const globalForPostgres = globalThis as unknown as {
+  taskCalendarSql?: postgres.Sql;
+};
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required for app database access.");
+export function hasDatabaseUrl() {
+  return Boolean(connectionString);
 }
 
-export const queryClient = postgres(connectionString, {
-  prepare: false
-});
+export function getSql() {
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required for app database access.");
+  }
 
-export const db = drizzle(queryClient);
+  globalForPostgres.taskCalendarSql ??= postgres(connectionString, {
+    prepare: false
+  });
+
+  return globalForPostgres.taskCalendarSql;
+}
