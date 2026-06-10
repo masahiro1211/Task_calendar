@@ -1,5 +1,7 @@
 "use client";
 
+import { Ban } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cancelTaskAction } from "../actions";
 
 export function CancelTaskForm({
@@ -25,9 +27,10 @@ export function CancelTaskForm({
       }}
     >
       <input name="taskId" type="hidden" value={taskId} />
-      <button className="text-button danger" type="submit">
-        Cancel
-      </button>
+      <Button size="icon" type="submit" variant="ghost">
+        <Ban className="h-4 w-4 text-destructive" />
+        <span className="sr-only">Cancel task</span>
+      </Button>
     </form>
   );
 }

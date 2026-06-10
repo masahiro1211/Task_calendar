@@ -1,20 +1,46 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import FullCalendar from "@fullcalendar/react";
-import type { EventClickArg, EventDropArg, EventInput } from "@fullcalendar/core";
+import type {
+  EventClickArg,
+  EventContentArg,
+  EventDropArg,
+  EventInput,
+  DateSelectArg
+} from "@fullcalendar/core";
 import interactionPlugin, {
   Draggable,
   type EventReceiveArg,
   type EventResizeDoneArg
 } from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
+import { Check, GripVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   createBlockAction,
-  deleteBlockAction,
+  createTaskWithBlockAction,
+  markTaskDoneAction,
   updateBlockAction
 } from "../actions";
+import { TaskDetailSheet, type TaskDetailClient } from "./task-detail-sheet";
 
 export interface PoolTaskClient {
   id: string;
@@ -33,16 +59,36 @@ export interface CalendarBlockClient {
   rescheduledCount: number;
 }
 
+export interface DeadlineLaneTaskClient {
+  id: string;
+  title: string;
+  size: string;
+  estimateMin: number | null;
+  effectiveDeadline: string;
+}
+
+interface PendingSelection {
+  startAt: string;
+  endAt: string;
+}
+
 export function PlanningCalendar({
   poolTasks,
-  blocks
+  blocks,
+  deadlineTasks,
+  tasks
 }: {
   poolTasks: PoolTaskClient[];
   blocks: CalendarBlockClient[];
+  deadlineTasks: DeadlineLaneTaskClient[];
+  tasks: TaskDetailClient[];
 }) {
   const poolRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null);
+  const [newTaskSize, setNewTaskSize] = useState<"M" | "S">("M");
 
   useEffect(() => {
     if (!poolRef.current) {
@@ -60,19 +106,40 @@ export function PlanningCalendar({
     return () => draggable.destroy();
   }, [poolTasks]);
 
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+
   const events = useMemo<EventInput[]>(
-    () =>
-      blocks.map((block) => ({
+    () => [
+      ...deadlineTasks.map((task) => ({
+        id: `deadline:${task.id}`,
+        title: task.title,
+        start: task.effectiveDeadline,
+        allDay: true,
+        editable: false,
+        startEditable: false,
+        durationEditable: false,
+        classNames: ["deadline-event"],
+        extendedProps: {
+          kind: "deadline",
+          taskId: task.id,
+          size: task.size
+        }
+      })),
+      ...blocks.map((block) => ({
         id: block.id,
         title: block.title,
         start: block.startAt,
         end: block.endAt,
+        editable: true,
+        classNames: ["block-event"],
         extendedProps: {
+          kind: "block",
           taskId: block.taskId,
           rescheduledCount: block.rescheduledCount
         }
-      })),
-    [blocks]
+      }))
+    ],
+    [blocks, deadlineTasks]
   );
 
   async function receiveEvent(arg: EventReceiveArg) {
@@ -101,6 +168,11 @@ export function PlanningCalendar({
   }
 
   async function moveEvent(arg: EventDropArg) {
+    if (arg.event.extendedProps.kind !== "block") {
+      arg.revert();
+      return;
+    }
+
     const startAt = arg.event.start;
     const endAt = arg.event.end;
 
@@ -121,6 +193,11 @@ export function PlanningCalendar({
   }
 
   async function resizeEvent(arg: EventResizeDoneArg) {
+    if (arg.event.extendedProps.kind !== "block") {
+      arg.revert();
+      return;
+    }
+
     const startAt = arg.event.start;
     const endAt = arg.event.end;
 
@@ -140,67 +217,186 @@ export function PlanningCalendar({
     }
   }
 
-  async function clickEvent(arg: EventClickArg) {
-    if (!window.confirm(`Delete "${arg.event.title}"?`)) {
+  function clickEvent(arg: EventClickArg) {
+    const taskId = arg.event.extendedProps.taskId;
+
+    if (typeof taskId === "string") {
+      setSelectedTaskId(taskId);
+    }
+  }
+
+  function selectSlot(arg: DateSelectArg) {
+    if (arg.allDay) {
+      arg.view.calendar.unselect();
       return;
     }
 
-    await deleteBlockAction(arg.event.id);
-    arg.event.remove();
+    setNewTaskSize("M");
+    setPendingSelection({
+      startAt: arg.start.toISOString(),
+      endAt: arg.end.toISOString()
+    });
+  }
+
+  async function createTaskForSelection(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!pendingSelection) {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") ?? "").trim();
+
+    if (!title) {
+      return;
+    }
+
+    await createTaskWithBlockAction({
+      title,
+      size: newTaskSize,
+      startAt: pendingSelection.startAt,
+      endAt: pendingSelection.endAt
+    });
+    setPendingSelection(null);
     startTransition(() => router.refresh());
   }
 
-  return (
-    <section className="planning-grid">
-      <aside className="pool-panel">
-        <div className="panel-heading">
-          <h2>Pool</h2>
-          <span>{poolTasks.length}</span>
+  async function markDeadlineDone(event: React.MouseEvent, taskId: string) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const formData = new FormData();
+    formData.set("taskId", taskId);
+    await markTaskDoneAction(formData);
+    startTransition(() => router.refresh());
+  }
+
+  function renderEventContent(arg: EventContentArg) {
+    if (arg.event.extendedProps.kind === "deadline") {
+      const taskId = arg.event.extendedProps.taskId as string;
+
+      return (
+        <div className="deadline-event-content">
+          <button
+            aria-label="Mark done"
+            className="deadline-check"
+            onClick={(event) => void markDeadlineDone(event, taskId)}
+            onMouseDown={(event) => event.stopPropagation()}
+            type="button"
+          >
+            <Check className="h-3 w-3" />
+          </button>
+          <span className="truncate">{arg.event.title}</span>
         </div>
-        <div ref={poolRef} className="pool-list">
-          {poolTasks.map((task) => (
-            <div
-              key={task.id}
-              className="pool-item"
-              data-estimate-min={task.estimateMin ?? defaultEstimate(task.size)}
-              data-task-id={task.id}
-              data-title={task.title}
-            >
-              <strong>{task.title}</strong>
-              <span>
-                {task.size}
-                {task.effectiveDeadline ? ` / ${task.effectiveDeadline}` : ""}
-              </span>
-            </div>
-          ))}
-        </div>
-      </aside>
-      <div className="calendar-panel">
-        <FullCalendar
-          allDaySlot={false}
-          editable
-          eventClick={clickEvent}
-          eventDrop={moveEvent}
-          eventReceive={receiveEvent}
-          eventResize={resizeEvent}
-          events={events}
-          headerToolbar={{
-            left: "prev,next today",
-            center: "title",
-            right: "timeGridWeek,timeGridDay"
-          }}
-          height="auto"
-          initialView="timeGridWeek"
-          locale="ja"
-          nowIndicator
-          plugins={[timeGridPlugin, interactionPlugin]}
-          slotDuration="00:30:00"
-          slotMinTime="06:00:00"
-          slotMaxTime="24:00:00"
-          timeZone="Asia/Tokyo"
-        />
+      );
+    }
+
+    return (
+      <div className="block-event-content">
+        <span className="truncate">{arg.event.title}</span>
       </div>
-    </section>
+    );
+  }
+
+  return (
+    <>
+      <section className="grid h-[calc(100vh-4rem)] min-h-[640px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden max-lg:h-auto max-lg:grid-cols-1">
+        <aside className="min-h-0 border-r bg-card max-lg:border-b max-lg:border-r-0">
+          <div className="flex h-12 items-center justify-between border-b px-3">
+            <h2 className="text-sm font-semibold">Pool</h2>
+            <Badge variant="outline">{poolTasks.length}</Badge>
+          </div>
+          <div className="h-[calc(100%-3rem)] overflow-y-auto p-3" ref={poolRef}>
+            <div className="grid gap-2">
+              {poolTasks.map((task) => (
+                <div
+                  className={cn(
+                    "pool-item grid cursor-grab gap-1 rounded-md border bg-background p-3 shadow-sm active:cursor-grabbing",
+                    urgencyBorder(task.effectiveDeadline)
+                  )}
+                  data-estimate-min={task.estimateMin ?? defaultEstimate(task.size)}
+                  data-task-id={task.id}
+                  data-title={task.title}
+                  key={task.id}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <strong className="truncate text-sm">{task.title}</strong>
+                  </div>
+                  <span className="pl-6 text-xs text-muted-foreground">
+                    {task.size}
+                    {task.estimateMin ? ` / ${task.estimateMin}m` : ""}
+                    {task.effectiveDeadline ? ` / due ${task.effectiveDeadline}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+        <div className="min-w-0 overflow-hidden p-3">
+          <FullCalendar
+            allDaySlot
+            editable
+            eventClick={clickEvent}
+            eventContent={renderEventContent}
+            eventDrop={moveEvent}
+            eventReceive={receiveEvent}
+            eventResize={resizeEvent}
+            events={events}
+            headerToolbar={{
+              left: "prev,next today",
+              center: "title",
+              right: "timeGridDay,timeGridWeek"
+            }}
+            height="100%"
+            initialView="timeGridDay"
+            locale="ja"
+            nowIndicator
+            plugins={[timeGridPlugin, interactionPlugin]}
+            scrollTime={initialScrollTime()}
+            selectable
+            select={selectSlot}
+            selectMirror
+            slotDuration="00:30:00"
+            slotMaxTime="24:00:00"
+            slotMinTime="06:00:00"
+            timeZone="Asia/Tokyo"
+          />
+        </div>
+      </section>
+
+      <Dialog onOpenChange={(open) => !open && setPendingSelection(null)} open={pendingSelection !== null}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create task in selected slot</DialogTitle>
+          </DialogHeader>
+          <form className="grid gap-3" onSubmit={(event) => void createTaskForSelection(event)}>
+            <Input autoFocus name="title" placeholder="Title" required />
+            <Select onValueChange={(value) => setNewTaskSize(value as "M" | "S")} value={newTaskSize}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="M">M</SelectItem>
+                <SelectItem value="S">S</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button type="submit">Create</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <TaskDetailSheet
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedTaskId(null);
+          }
+        }}
+        open={selectedTask !== null}
+        task={selectedTask}
+      />
+    </>
   );
 }
 
@@ -213,4 +409,49 @@ function minutesToDuration(minutes: number) {
   const remainingMinutes = minutes % 60;
 
   return `${String(hours).padStart(2, "0")}:${String(remainingMinutes).padStart(2, "0")}:00`;
+}
+
+function initialScrollTime() {
+  const now = new Date();
+  now.setHours(now.getHours() - 1);
+
+  return `${String(now.getHours()).padStart(2, "0")}:00:00`;
+}
+
+function urgencyBorder(deadline: string | null) {
+  if (!deadline) {
+    return "border-l-4 border-l-slate-300";
+  }
+
+  const today = tokyoDateString(new Date());
+  const tomorrow = tokyoDateString(addDays(new Date(), 1));
+  const threeDays = tokyoDateString(addDays(new Date(), 3));
+
+  if (deadline <= tomorrow || deadline < today) {
+    return "border-l-4 border-l-red-500";
+  }
+
+  if (deadline <= threeDays) {
+    return "border-l-4 border-l-amber-500";
+  }
+
+  return "border-l-4 border-l-slate-300";
+}
+
+function addDays(date: Date, days: number) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function tokyoDateString(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Tokyo",
+    year: "numeric"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${values.year}-${values.month}-${values.day}`;
 }

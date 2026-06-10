@@ -6,11 +6,14 @@ Next.js、PostgreSQL、raw SQL で作る個人用タスクスケジューラで�
 
 ## 現在の実装範囲
 
-- タスクツリーの作成、編集、分割、done、reopen、cancel
-- `v_pool` に基づくデイリープランニング用プール
-- FullCalendar の週/日ビュー
-- プールからカレンダーへのドラッグ配置
-- カレンダーブロックのドラッグ移動、リサイズ、削除
+- `/plan`: 左に `v_pool` ベースの Pool、右に FullCalendar を置くデイリープランニング画面
+- `/tasks`: タスクツリーの作成、編集、分割、done、reopen、cancel
+- タスク編集はインライン展開ではなく Sheet に集約
+- FullCalendar の日/週ビュー、now indicator、Asia/Tokyo 表示
+- Pool からカレンダーへの external drag/drop 配置
+- カレンダーブロックのドラッグ移動、リサイズ、Sheet 内からの削除
+- 空きスロット選択から task + block を 1 transaction で作成
+- `v_tasks_resolved.effective_deadline` に基づく all-day 締切レーン
 - service 層の不変条件と integration test
 
 まだ未実装: Google Calendar 連携、認証、PWA、分析機能、Obsidian 移行スクリプト。
@@ -23,10 +26,13 @@ Next.js、PostgreSQL、raw SQL で作る個人用タスクスケジューラで�
 - DB 書き込みは [src/services/tasks.ts](src/services/tasks.ts) の service 層に集約します。
 - UI からの書き込みは [src/app/actions.ts](src/app/actions.ts) の Server Actions 経由です。
 - 読み取りは DB view と [src/services/queries.ts](src/services/queries.ts) の query helper を使います。
+- UI は Tailwind CSS と shadcn/ui 相当のローカル component で構成しています。
+- FullCalendar は client component として [src/app/components/planning-calendar.tsx](src/app/components/planning-calendar.tsx) に隔離しています。
 
 重要な service 不変条件:
 
 - block 作成は open な M/S の葉タスクのみ許可します。
+- 空きスロット選択からの `createTaskWithBlock` は task と block を同一 transaction で作成します。
 - 子追加は open かつ未来 block を持たない task にのみ許可します。
 - done にできるのは open な葉タスクのみです。
 - cancel は open な子孫だけを cancelled にします。done 子孫は done のまま保持します。
@@ -81,7 +87,7 @@ npm run db:migrate
 npm run dev
 ```
 
-ブラウザで `http://localhost:3000` を開きます。
+ブラウザで `http://localhost:3000/plan` を開きます。`/` は `/plan` に redirect します。
 
 ## よく使うコマンド
 
@@ -139,4 +145,4 @@ migration 用の `DIRECT_DATABASE_URL` は port `5432` の direct connection を
 npm audit --omit=dev
 ```
 
-現時点では本番依存ツリーの vulnerability は 0 件です。dev dependency 経由の audit は、公開デプロイ前に改めて確認します。
+依存追加後は結果が変わり得るため、公開デプロイ前に改めて確認します。

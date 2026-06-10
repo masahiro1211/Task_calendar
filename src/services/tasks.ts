@@ -51,6 +51,14 @@ export interface CreateBlockInput {
   endAt: TimestampInput;
 }
 
+export interface CreateTaskWithBlockInput {
+  title: string;
+  size: TaskSize;
+  estimateMin?: number | null;
+  startAt: TimestampInput;
+  endAt: TimestampInput;
+}
+
 export interface UpdateBlockInput {
   startAt?: TimestampInput;
   endAt?: TimestampInput;
@@ -159,20 +167,50 @@ export function createTaskService({
       assertValidRange(startAt, endAt);
       await assertCanCreateBlock(sql, input.taskId);
 
-      const [block] = await sql<BlockRow[]>`
-        insert into blocks (task_id, start_at, end_at)
-        values (${input.taskId}, ${startAt}, ${endAt})
-        returning
-          id,
-          task_id,
-          start_at,
-          end_at,
-          rescheduled_count,
-          created_at,
-          updated_at
-      `;
+      return insertBlock(sql, {
+        taskId: input.taskId,
+        startAt,
+        endAt
+      });
+    },
 
-      return mapBlock(block);
+    async createTaskWithBlock(input: CreateTaskWithBlockInput) {
+      const title = input.title.trim();
+      const startAt = toDate(input.startAt);
+      const endAt = toDate(input.endAt);
+
+      if (title === "") {
+        throw new TaskServiceError("title is required.");
+      }
+
+      if (input.size === "L") {
+        throw new TaskServiceError("createTaskWithBlock only accepts M/S tasks.");
+      }
+
+      if (input.estimateMin !== undefined && input.estimateMin !== null && input.estimateMin <= 0) {
+        throw new TaskServiceError("estimateMin must be positive.");
+      }
+
+      assertValidRange(startAt, endAt);
+
+      return sql.begin(async (tx) => {
+        const task = await insertTask(tx, {
+          parentId: null,
+          title,
+          size: input.size,
+          estimateMin: input.estimateMin ?? null
+        });
+
+        await assertCanCreateBlock(tx, task.id);
+
+        const block = await insertBlock(tx, {
+          taskId: task.id,
+          startAt,
+          endAt
+        });
+
+        return { task, block };
+      });
     },
 
     async updateBlock(blockId: string, input: UpdateBlockInput) {
@@ -393,6 +431,30 @@ async function insertTask(sql: Sql, input: TaskWriteInput) {
   `;
 
   return mapTask(task);
+}
+
+async function insertBlock(
+  sql: Sql,
+  input: {
+    taskId: string;
+    startAt: Date;
+    endAt: Date;
+  }
+) {
+  const [block] = await sql<BlockRow[]>`
+    insert into blocks (task_id, start_at, end_at)
+    values (${input.taskId}, ${input.startAt}, ${input.endAt})
+    returning
+      id,
+      task_id,
+      start_at,
+      end_at,
+      rescheduled_count,
+      created_at,
+      updated_at
+  `;
+
+  return mapBlock(block);
 }
 
 async function assertCanCreateBlock(sql: Sql, taskId: string) {

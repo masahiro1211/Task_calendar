@@ -1,5 +1,8 @@
-import { getSql } from "@/db/client";
+import { getSql } from "../db/client";
 import type { TaskSize, TaskState } from "./tasks";
+import type postgres from "postgres";
+
+type Sql = postgres.Sql | postgres.TransactionSql;
 
 export interface TaskTreeItem {
   id: string;
@@ -37,6 +40,22 @@ export interface CalendarBlock {
   startAt: Date;
   endAt: Date;
   rescheduledCount: number;
+}
+
+export interface TaskBlock {
+  id: string;
+  taskId: string;
+  startAt: Date;
+  endAt: Date;
+  rescheduledCount: number;
+}
+
+export interface DeadlineLaneTask {
+  id: string;
+  title: string;
+  size: TaskSize;
+  estimateMin: number | null;
+  effectiveDeadline: string;
 }
 
 interface TaskTreeRow {
@@ -78,7 +97,27 @@ interface CalendarBlockRow {
   rescheduled_count: number;
 }
 
-export async function listTaskTree() {
+interface TaskBlockRow {
+  id: string;
+  task_id: string;
+  start_at: Date;
+  end_at: Date;
+  rescheduled_count: number;
+}
+
+interface DeadlineLaneTaskRow {
+  id: string;
+  title: string;
+  size: TaskSize;
+  estimate_min: number | null;
+  effective_deadline: string;
+}
+
+export async function listTaskTree({
+  includeCancelled = false
+}: {
+  includeCancelled?: boolean;
+} = {}) {
   const sql = getSql();
   const rows = await sql<TaskTreeRow[]>`
     select
@@ -119,6 +158,7 @@ export async function listTaskTree() {
       from target
       left join blocks b on b.task_id = target.id
     ) impact on true
+    where (${includeCancelled} or l.state <> 'cancelled')
     order by l.path
   `;
 
@@ -197,6 +237,62 @@ export async function listCalendarBlocks({
     startAt: row.start_at,
     endAt: row.end_at,
     rescheduledCount: row.rescheduled_count
+  }));
+}
+
+export async function listTaskBlocks(taskId: string, sqlClient: Sql = getSql()) {
+  const rows = await sqlClient<TaskBlockRow[]>`
+    select
+      id,
+      task_id,
+      start_at,
+      end_at,
+      rescheduled_count
+    from blocks
+    where task_id = ${taskId}
+    order by start_at desc
+  `;
+
+  return rows.map((row) => ({
+    id: row.id,
+    taskId: row.task_id,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    rescheduledCount: row.rescheduled_count
+  }));
+}
+
+export async function listDeadlineLaneTasks(
+  {
+    startDate,
+    endDate
+  }: {
+    startDate: string;
+    endDate: string;
+  },
+  sqlClient: Sql = getSql()
+) {
+  const rows = await sqlClient<DeadlineLaneTaskRow[]>`
+    select
+      id,
+      title,
+      size::text as size,
+      estimate_min,
+      effective_deadline::text as effective_deadline
+    from v_tasks_resolved
+    where state = 'open'
+      and effective_deadline is not null
+      and effective_deadline >= ${startDate}::date
+      and effective_deadline < ${endDate}::date
+    order by effective_deadline, path
+  `;
+
+  return rows.map((row): DeadlineLaneTask => ({
+    id: row.id,
+    title: row.title,
+    size: row.size,
+    estimateMin: row.estimate_min,
+    effectiveDeadline: row.effective_deadline
   }));
 }
 

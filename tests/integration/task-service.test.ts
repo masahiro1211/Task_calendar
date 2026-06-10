@@ -49,6 +49,79 @@ maybeDescribe("task service", () => {
     ).resolves.toMatchObject({ taskId: sTask.id });
   });
 
+  it("creates a task and block atomically for M/S sizes", async () => {
+    const createdM = await service.createTaskWithBlock({
+      title: "planned m",
+      size: "M",
+      estimateMin: 90,
+      startAt: "2026-06-10T09:00:00Z",
+      endAt: "2026-06-10T10:30:00Z"
+    });
+
+    expect(createdM.task).toMatchObject({
+      title: "planned m",
+      size: "M",
+      estimateMin: 90,
+      state: "open"
+    });
+    expect(createdM.block).toMatchObject({
+      taskId: createdM.task.id
+    });
+
+    const createdS = await service.createTaskWithBlock({
+      title: "planned s",
+      size: "S",
+      startAt: "2026-06-10T11:00:00Z",
+      endAt: "2026-06-10T11:30:00Z"
+    });
+
+    expect(createdS.task.size).toBe("S");
+    expect(createdS.block.taskId).toBe(createdS.task.id);
+  });
+
+  it("rejects createTaskWithBlock for L tasks", async () => {
+    await expect(
+      service.createTaskWithBlock({
+        title: "too large",
+        size: "L",
+        startAt: "2026-06-10T09:00:00Z",
+        endAt: "2026-06-10T10:00:00Z"
+      })
+    ).rejects.toThrow(TaskServiceError);
+  });
+
+  it("rejects createTaskWithBlock with invalid ranges", async () => {
+    await expect(
+      service.createTaskWithBlock({
+        title: "bad range",
+        size: "M",
+        startAt: "2026-06-10T10:00:00Z",
+        endAt: "2026-06-10T10:00:00Z"
+      })
+    ).rejects.toThrow(TaskServiceError);
+  });
+
+  it("rolls back task and block creation when createTaskWithBlock fails", async () => {
+    await expect(
+      service.createTaskWithBlock({
+        title: "rollback me",
+        size: "L",
+        startAt: "2026-06-10T09:00:00Z",
+        endAt: "2026-06-10T10:00:00Z"
+      })
+    ).rejects.toThrow(TaskServiceError);
+
+    const [counts] = await sql<{ task_count: string; block_count: string }[]>`
+      select
+        count(*) filter (where title = 'rollback me') as task_count,
+        (select count(*) from blocks) as block_count
+      from tasks
+    `;
+
+    expect(counts.task_count).toBe("0");
+    expect(counts.block_count).toBe("0");
+  });
+
   it("rejects block creation for L leaves, non-leaves, done tasks, and cancelled tasks", async () => {
     const lLeaf = await service.createTask({ title: "l leaf", size: "L" });
     const parent = await service.createTask({ title: "parent", size: "M" });
