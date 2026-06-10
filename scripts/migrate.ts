@@ -1,4 +1,7 @@
+import { loadEnvConfig } from "@next/env";
 import { runMigrations } from "../src/db/migrations";
+
+loadEnvConfig(process.cwd());
 
 async function main() {
   const directDatabaseUrl = process.env.DIRECT_DATABASE_URL;
