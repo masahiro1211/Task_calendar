@@ -23,39 +23,43 @@ export async function runMigrations(connectionString: string) {
   });
 
   try {
-    await sql`
-      create table if not exists schema_migrations (
-        name text primary key,
-        applied_at timestamptz not null default now()
-      )
-    `;
-
-    const files = (await fs.readdir(migrationsDir))
-      .filter((file) => file.endsWith(".sql"))
-      .sort();
-
-    for (const file of files) {
-      const [{ exists }] = await sql<{ exists: boolean }[]>`
-        select exists(
-          select 1 from schema_migrations where name = ${file}
-        ) as exists
-      `;
-
-      if (exists) {
-        continue;
-      }
-
-      const migrationSql = await fs.readFile(path.join(migrationsDir, file), "utf8");
-
-      await sql.begin(async (tx) => {
-        await tx.unsafe(migrationSql);
-        await tx`
-          insert into schema_migrations (name)
-          values (${file})
-        `;
-      });
-    }
+    await runMigrationsWithSql(sql);
   } finally {
     await sql.end();
+  }
+}
+
+export async function runMigrationsWithSql(sql: postgres.Sql) {
+  await sql`
+    create table if not exists schema_migrations (
+      name text primary key,
+      applied_at timestamptz not null default now()
+    )
+  `;
+
+  const files = (await fs.readdir(migrationsDir))
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+
+  for (const file of files) {
+    const [{ exists }] = await sql<{ exists: boolean }[]>`
+      select exists(
+        select 1 from schema_migrations where name = ${file}
+      ) as exists
+    `;
+
+    if (exists) {
+      continue;
+    }
+
+    const migrationSql = await fs.readFile(path.join(migrationsDir, file), "utf8");
+
+    await sql.begin(async (tx) => {
+      await tx.unsafe(migrationSql);
+      await tx`
+        insert into schema_migrations (name)
+        values (${file})
+      `;
+    });
   }
 }
