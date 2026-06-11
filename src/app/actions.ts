@@ -92,6 +92,11 @@ export async function markTaskDoneAction(formData: FormData) {
   revalidatePlannerPaths();
 }
 
+export async function completeTaskTreeAction(formData: FormData) {
+  await taskService().completeSubtree(requiredString(formData.get("taskId"), "taskId"));
+  revalidatePlannerPaths();
+}
+
 export async function reopenTaskAction(formData: FormData) {
   await taskService().reopenTask(requiredString(formData.get("taskId"), "taskId"));
   revalidatePlannerPaths();

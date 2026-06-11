@@ -56,6 +56,7 @@ export interface DeadlineLaneTask {
   title: string;
   size: TaskSize;
   state: TaskState;
+  isLeaf: boolean;
   estimateMin: number | null;
   effectiveDeadline: string;
 }
@@ -113,6 +114,7 @@ interface DeadlineLaneTaskRow {
   title: string;
   size: TaskSize;
   state: TaskState;
+  is_leaf: boolean;
   estimate_min: number | null;
   effective_deadline: string;
 }
@@ -280,18 +282,38 @@ export async function listDeadlineLaneTasks(
 ) {
   const rows = await sqlClient<DeadlineLaneTaskRow[]>`
     select
-      id,
-      title,
-      size::text as size,
-      state::text as state,
-      estimate_min,
-      effective_deadline::text as effective_deadline
-    from v_tasks_resolved
-    where state in ('open', 'done')
-      and effective_deadline is not null
-      and effective_deadline >= ${startDate}::date
-      and effective_deadline < ${endDate}::date
-    order by effective_deadline, path
+      t.id,
+      t.title,
+      t.size::text as size,
+      case
+        when t.state = 'done' then 'done'
+        when not t.is_leaf
+          and not exists (
+            select 1 from v_leaves d
+            where d.is_leaf
+              and d.state = 'open'
+              and t.id = any(d.path)
+              and d.id <> t.id
+          )
+          and exists (
+            select 1 from v_leaves d
+            where d.is_leaf
+              and d.state = 'done'
+              and t.id = any(d.path)
+              and d.id <> t.id
+          )
+        then 'done'
+        else t.state::text
+      end as state,
+      t.is_leaf,
+      t.estimate_min,
+      t.effective_deadline::text as effective_deadline
+    from v_leaves t
+    where t.state in ('open', 'done')
+      and t.effective_deadline is not null
+      and t.effective_deadline >= ${startDate}::date
+      and t.effective_deadline < ${endDate}::date
+    order by t.effective_deadline, t.path
   `;
 
   return rows.map((row): DeadlineLaneTask => ({
@@ -299,6 +321,7 @@ export async function listDeadlineLaneTasks(
     title: row.title,
     size: row.size,
     state: row.state,
+    isLeaf: row.is_leaf,
     estimateMin: row.estimate_min,
     effectiveDeadline: row.effective_deadline
   }));

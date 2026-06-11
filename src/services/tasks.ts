@@ -295,6 +295,30 @@ export function createTaskService({
       return mapTask(task);
     },
 
+    async completeSubtree(taskId: string) {
+      return sql.begin(async (tx) => {
+        await getTask(tx, taskId);
+
+        const updated = await tx`
+          with recursive target as (
+            select id from tasks where id = ${taskId}
+            union all
+            select child.id
+            from tasks child
+            join target on child.parent_id = target.id
+          )
+          update tasks
+          set state = 'done', done_at = ${now()}
+          where id in (select id from target)
+            and state = 'open'
+            and not exists (select 1 from tasks c where c.parent_id = tasks.id)
+          returning id
+        `;
+
+        return updated.length;
+      });
+    },
+
     async reopenTask(taskId: string) {
       const existing = await getTask(sql, taskId);
 

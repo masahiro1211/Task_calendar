@@ -129,6 +129,7 @@ function toDeadlineLaneTaskClient(task: {
   title: string;
   size: string;
   state: "open" | "done" | "cancelled";
+  isLeaf: boolean;
   estimateMin: number | null;
   effectiveDeadline: string;
 }): DeadlineLaneTaskClient {
@@ -137,6 +138,7 @@ function toDeadlineLaneTaskClient(task: {
     title: task.title,
     size: task.size,
     state: task.state,
+    isLeaf: task.isLeaf,
     estimateMin: task.estimateMin,
     effectiveDeadline: task.effectiveDeadline
   };

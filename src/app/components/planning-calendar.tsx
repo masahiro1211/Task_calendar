@@ -38,6 +38,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDateLabel, sizeLabel } from "@/lib/labels";
 import {
+  completeTaskTreeAction,
   createBlockAction,
   createTaskAction,
   createTaskWithBlockAction,
@@ -77,6 +78,7 @@ export interface DeadlineLaneTaskClient {
   title: string;
   size: string;
   state: "open" | "done" | "cancelled";
+  isLeaf: boolean;
   estimateMin: number | null;
   effectiveDeadline: string;
 }
@@ -130,22 +132,29 @@ export function PlanningCalendar({
 
   const events = useMemo<EventInput[]>(
     () => [
-      ...deadlineTasks.map((task) => ({
-        id: `deadline:${task.id}`,
-        title: task.title,
-        start: task.effectiveDeadline,
-        allDay: true,
-        editable: false,
-        startEditable: false,
-        durationEditable: false,
-        classNames: task.state === "done" ? ["deadline-event", "event-done"] : ["deadline-event"],
-        extendedProps: {
-          kind: "deadline",
-          taskId: task.id,
-          size: task.size,
-          state: task.state
-        }
-      })),
+      ...deadlineTasks.map((task) => {
+        const placeable = task.state === "open" && task.isLeaf && task.size !== "L";
+
+        return {
+          id: `deadline:${task.id}`,
+          title: task.title,
+          start: task.effectiveDeadline,
+          allDay: true,
+          editable: placeable,
+          startEditable: placeable,
+          durationEditable: false,
+          classNames:
+            task.state === "done" ? ["deadline-event", "event-done"] : ["deadline-event"],
+          extendedProps: {
+            kind: "deadline",
+            taskId: task.id,
+            size: task.size,
+            state: task.state,
+            isLeaf: task.isLeaf,
+            estimateMin: task.estimateMin
+          }
+        };
+      }),
       ...blocks.map((block) => ({
         id: block.id,
         title: block.title,
@@ -191,6 +200,11 @@ export function PlanningCalendar({
   }
 
   async function moveEvent(arg: EventDropArg) {
+    if (arg.event.extendedProps.kind === "deadline") {
+      await placeDeadlineTask(arg);
+      return;
+    }
+
     if (arg.event.extendedProps.kind !== "block") {
       arg.revert();
       return;
@@ -213,6 +227,36 @@ export function PlanningCalendar({
     } catch {
       arg.revert();
     }
+  }
+
+  // 終日レーンの中・小タスクを時間グリッドへドラッグ → その時刻にブロックを作成。
+  // 〆切マーカー自体は動かさないので、イベントは必ず元の位置へ戻す。
+  async function placeDeadlineTask(arg: EventDropArg) {
+    const startAt = arg.event.start;
+    const taskId = arg.event.extendedProps.taskId;
+
+    if (arg.event.allDay || !startAt || typeof taskId !== "string") {
+      arg.revert();
+      return;
+    }
+
+    const estimateMin =
+      Number(arg.event.extendedProps.estimateMin) ||
+      defaultEstimate(arg.event.extendedProps.size === "S" ? "S" : "M");
+    const endAt = new Date(startAt.getTime() + estimateMin * 60_000);
+
+    try {
+      await createBlockAction({
+        taskId,
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString()
+      });
+    } catch {
+      // ブロックを作れない場合もマーカーは元に戻すだけでよい
+    }
+
+    arg.revert();
+    startTransition(() => router.refresh());
   }
 
   async function resizeEvent(arg: EventResizeDoneArg) {
@@ -310,7 +354,12 @@ export function PlanningCalendar({
     startTransition(() => router.refresh());
   }
 
-  async function toggleDeadlineDone(event: React.MouseEvent, taskId: string, state: string) {
+  async function toggleDeadlineDone(
+    event: React.MouseEvent,
+    taskId: string,
+    state: string,
+    isLeaf: boolean
+  ) {
     event.preventDefault();
     event.stopPropagation();
 
@@ -318,7 +367,17 @@ export function PlanningCalendar({
     formData.set("taskId", taskId);
 
     try {
-      if (state === "done") {
+      if (!isLeaf) {
+        if (state === "done") {
+          return;
+        }
+
+        if (!window.confirm("残っている子タスクをすべて完了にしますか?")) {
+          return;
+        }
+
+        await completeTaskTreeAction(formData);
+      } else if (state === "done") {
         await reopenTaskAction(formData);
       } else {
         await markTaskDoneAction(formData);
@@ -334,14 +393,15 @@ export function PlanningCalendar({
     if (arg.event.extendedProps.kind === "deadline") {
       const taskId = arg.event.extendedProps.taskId as string;
       const state = arg.event.extendedProps.state as string;
+      const isLeaf = arg.event.extendedProps.isLeaf !== false;
       const done = state === "done";
 
       return (
         <div className="deadline-event-content">
           <button
-            aria-label={done ? "再開する" : "完了にする"}
+            aria-label={done ? (isLeaf ? "再開する" : "完了済み") : "完了にする"}
             className={cn("deadline-check", done && "deadline-check-done")}
-            onClick={(event) => void toggleDeadlineDone(event, taskId, state)}
+            onClick={(event) => void toggleDeadlineDone(event, taskId, state, isLeaf)}
             onMouseDown={(event) => event.stopPropagation()}
             type="button"
           >
