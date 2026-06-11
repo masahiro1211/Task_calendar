@@ -18,7 +18,7 @@ export function CancelTaskForm({
       action={cancelTaskAction}
       onSubmit={(event) => {
         const confirmed = window.confirm(
-          `Cancel ${cancelCandidateCount} open task(s) and delete ${futureBlockCount} future block(s)?`
+          `未完了のタスク ${cancelCandidateCount} 件を中止し、今後の予定 ${futureBlockCount} 件を削除します。よろしいですか?`
         );
 
         if (!confirmed) {
@@ -34,7 +34,7 @@ export function CancelTaskForm({
         variant="ghost"
       >
         <Ban className="h-4 w-4" />
-        <span className="sr-only">Cancel task</span>
+        <span className="sr-only">中止</span>
       </Button>
     </form>
   );

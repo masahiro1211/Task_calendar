@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Pencil, Split } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatDateLabel, sizeLabel, stateLabel } from "@/lib/labels";
 import { CancelTaskForm } from "./cancel-task-form";
 import { TaskDetailSheet, type TaskDetailClient } from "./task-detail-sheet";
 
@@ -57,7 +58,7 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
           return (
             <article
               className={cn(
-                "grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 transition-colors hover:bg-muted/30",
+                "grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 transition-colors hover:bg-muted",
                 task.state === "done" && "bg-muted/40 text-muted-foreground",
                 task.state === "cancelled" && "bg-muted/60 text-muted-foreground"
               )}
@@ -93,13 +94,17 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
                     >
                       {task.title}
                     </button>
-                    <Badge variant="outline">{task.size}</Badge>
+                    <Badge variant="outline">{sizeLabel(task.size)}</Badge>
                     {progress ? <Badge variant="secondary">{progress}</Badge> : null}
-                    {task.state !== "open" ? <Badge variant="outline">{task.state}</Badge> : null}
+                    {task.state !== "open" ? (
+                      <Badge variant="outline">{stateLabel(task.state)}</Badge>
+                    ) : null}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {task.effectiveDeadline ? `due ${task.effectiveDeadline}` : "no deadline"}
-                    {task.estimateMin ? ` / ${task.estimateMin}m` : ""}
+                    {task.effectiveDeadline
+                      ? `〆切 ${formatDateLabel(task.effectiveDeadline)}`
+                      : "〆切なし"}
+                    {task.estimateMin ? ` ・ ${task.estimateMin}分` : ""}
                   </p>
                 </div>
               </div>
@@ -113,7 +118,7 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
                     variant="ghost"
                   >
                     <Split className="h-4 w-4" />
-                    <span className="sr-only">Split task</span>
+                    <span className="sr-only">分割</span>
                   </Button>
                 ) : null}
                 <Button
@@ -124,7 +129,7 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
                   variant="ghost"
                 >
                   <Pencil className="h-4 w-4" />
-                  <span className="sr-only">Edit task</span>
+                  <span className="sr-only">編集</span>
                 </Button>
                 {task.state === "open" ? (
                   <CancelTaskForm

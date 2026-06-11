@@ -5,24 +5,24 @@
 @layer base {
   :root {
     color-scheme: light;
-    --background: 210 20% 98%;
-    --foreground: 220 20% 12%;
+    --background: 0 0% 100%;
+    --foreground: 45 8% 20%;
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 12%;
-    --primary: 216 74% 42%;
+    --card-foreground: 45 8% 20%;
+    --primary: 210 77% 51%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 155 18% 90%;
-    --secondary-foreground: 165 24% 18%;
-    --muted: 220 14% 94%;
-    --muted-foreground: 220 10% 44%;
-    --accent: 210 28% 92%;
-    --accent-foreground: 220 20% 12%;
-    --destructive: 4 74% 45%;
+    --secondary: 48 10% 94%;
+    --secondary-foreground: 45 8% 27%;
+    --muted: 50 9% 96%;
+    --muted-foreground: 45 3% 46%;
+    --accent: 48 8% 93%;
+    --accent-foreground: 45 8% 20%;
+    --destructive: 0 65% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 88%;
-    --input: 220 14% 82%;
-    --ring: 216 74% 42%;
-    --radius: 0.5rem;
+    --border: 50 6% 90%;
+    --input: 45 6% 80%;
+    --ring: 210 77% 51%;
+    --radius: 0.375rem;
   }
 
   * {
@@ -66,8 +66,8 @@
   --fc-page-bg-color: hsl(var(--card));
   --fc-neutral-bg-color: hsl(var(--muted));
   --fc-today-bg-color: transparent;
-  --fc-highlight-color: hsl(var(--primary) / 0.1);
-  --fc-now-indicator-color: hsl(4 80% 52%);
+  --fc-highlight-color: hsl(var(--primary) / 0.08);
+  --fc-now-indicator-color: hsl(0 72% 56%);
   color: hsl(var(--foreground));
   font-size: 0.8125rem;
 }
@@ -131,7 +131,7 @@
 }
 
 .fc .fc-col-header-cell {
-  background: hsl(var(--muted) / 0.5);
+  background: transparent;
 }
 
 .fc .fc-col-header-cell-cushion {
@@ -175,14 +175,14 @@
 }
 
 .fc .block-event {
-  background: hsl(216 74% 96%);
-  border: 1px solid hsl(216 56% 82%);
+  background: hsl(210 75% 96%);
+  border: 1px solid hsl(210 55% 85%);
   border-left: 3px solid hsl(var(--primary));
-  color: hsl(216 55% 24%);
+  color: hsl(210 50% 28%);
 }
 
 .fc .block-event:hover {
-  background: hsl(216 74% 93%);
+  background: hsl(210 75% 93%);
 }
 
 .block-event-content {
@@ -195,7 +195,7 @@
 }
 
 .block-event-time {
-  color: hsl(216 74% 38%);
+  color: hsl(210 70% 42%);
   font-size: 0.6875rem;
   font-weight: 600;
   white-space: nowrap;
@@ -208,14 +208,14 @@
 }
 
 .fc .deadline-event {
-  background: hsl(44 92% 94%);
-  border: 1px solid hsl(42 72% 70%);
+  background: hsl(45 75% 94%);
+  border: 1px solid hsl(42 55% 75%);
   border-radius: 6px;
-  color: hsl(32 60% 24%);
+  color: hsl(35 45% 30%);
 }
 
 .fc .deadline-event:hover {
-  background: hsl(44 92% 90%);
+  background: hsl(45 75% 90%);
 }
 
 .deadline-event-content {
@@ -231,9 +231,9 @@
 .deadline-check {
   align-items: center;
   background: #ffffff;
-  border: 1px solid hsl(42 60% 62%);
+  border: 1px solid hsl(42 45% 65%);
   border-radius: 4px;
-  color: hsl(32 60% 24%);
+  color: hsl(35 45% 30%);
   display: inline-flex;
   flex-shrink: 0;
   height: 16px;
@@ -243,5 +243,5 @@
 }
 
 .deadline-check:hover {
-  background: hsl(44 92% 86%);
+  background: hsl(45 75% 86%);
 }

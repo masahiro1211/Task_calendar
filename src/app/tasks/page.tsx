@@ -17,7 +17,7 @@ export default async function TasksPage({
     return (
       <main className="grid min-h-screen place-items-center bg-background p-6">
         <section className="max-w-xl rounded-md border bg-card p-6">
-          <h1 className="text-xl font-semibold">DATABASE_URL is not configured.</h1>
+          <h1 className="text-xl font-semibold">DATABASE_URL が設定されていません。</h1>
         </section>
       </main>
     );
@@ -32,7 +32,7 @@ export default async function TasksPage({
       <AppHeader active="tasks">
         <Button asChild variant={includeCancelled ? "secondary" : "outline"}>
           <Link href={includeCancelled ? "/tasks" : "/tasks?cancelled=1"}>
-            {includeCancelled ? "Hide cancelled" : "Show cancelled"}
+            {includeCancelled ? "中止を隠す" : "中止も表示"}
           </Link>
         </Button>
       </AppHeader>
