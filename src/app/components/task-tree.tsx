@@ -57,7 +57,7 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
           return (
             <article
               className={cn(
-                "grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 transition-colors hover:bg-muted/30",
+                "grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 transition-colors hover:bg-muted",
                 task.state === "done" && "bg-muted/40 text-muted-foreground",
                 task.state === "cancelled" && "bg-muted/60 text-muted-foreground"
               )}

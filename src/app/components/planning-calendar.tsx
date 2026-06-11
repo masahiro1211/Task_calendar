@@ -303,7 +303,7 @@ export function PlanningCalendar({
   return (
     <>
       <section className="grid h-[calc(100vh-3.5rem)] min-h-[640px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden max-lg:h-auto max-lg:grid-cols-1">
-        <aside className="min-h-0 border-r bg-card max-lg:border-b max-lg:border-r-0">
+        <aside className="min-h-0 border-r bg-muted/50 max-lg:border-b max-lg:border-r-0">
           <div className="flex h-12 items-center justify-between border-b px-3">
             <h2 className="text-sm font-semibold">Pool</h2>
             <Badge variant="outline">{poolTasks.length}</Badge>
@@ -432,7 +432,7 @@ function initialScrollTime() {
 
 function urgencyBorder(deadline: string | null) {
   if (!deadline) {
-    return "border-l-4 border-l-slate-300";
+    return "border-l-4 border-l-stone-300";
   }
 
   const today = tokyoDateString(new Date());
@@ -447,7 +447,7 @@ function urgencyBorder(deadline: string | null) {
     return "border-l-4 border-l-amber-500";
   }
 
-  return "border-l-4 border-l-slate-300";
+  return "border-l-4 border-l-stone-300";
 }
 
 function urgencyText(deadline: string) {
