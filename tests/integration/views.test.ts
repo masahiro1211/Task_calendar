@@ -156,7 +156,13 @@ maybeDescribe("derived views", () => {
         ('00000000-0000-4000-8000-000000000504', null, 'done included', 'S', '2026-07-01', 'done', '2026-06-01T00:00:00Z'),
         ('00000000-0000-4000-8000-000000000505', null, 'cancelled excluded', 'S', '2026-07-01', 'cancelled', null),
         ('00000000-0000-4000-8000-000000000506', null, 'outside range', 'S', '2026-07-02', 'open', null),
-        ('00000000-0000-4000-8000-000000000507', null, 'no deadline', 'S', null, 'open', null)
+        ('00000000-0000-4000-8000-000000000507', null, 'no deadline', 'S', null, 'open', null),
+        ('00000000-0000-4000-8000-000000000508', null, 'placed excluded', 'M', '2026-07-01', 'open', null)
+    `;
+
+    await sql`
+      insert into blocks (task_id, start_at, end_at)
+      values ('00000000-0000-4000-8000-000000000508', '2099-01-01T09:00:00Z', '2099-01-01T10:00:00Z')
     `;
 
     const laneTasks = await listDeadlineLaneTasks(

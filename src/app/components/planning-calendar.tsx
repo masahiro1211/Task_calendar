@@ -153,7 +153,7 @@ export function PlanningCalendar({
         title: block.title,
         start: block.startAt,
         end: block.endAt,
-        editable: block.taskState === "open",
+        editable: true,
         classNames:
           block.taskState === "done" ? ["block-event", "event-done"] : ["block-event"],
         extendedProps: {
