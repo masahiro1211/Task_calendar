@@ -108,6 +108,7 @@ function toCalendarBlockClient(block: {
   id: string;
   taskId: string;
   title: string;
+  taskState: "open" | "done" | "cancelled";
   startAt: Date;
   endAt: Date;
   rescheduledCount: number;
@@ -116,6 +117,7 @@ function toCalendarBlockClient(block: {
     id: block.id,
     taskId: block.taskId,
     title: block.title,
+    taskState: block.taskState,
     startAt: block.startAt.toISOString(),
     endAt: block.endAt.toISOString(),
     rescheduledCount: block.rescheduledCount
@@ -126,6 +128,7 @@ function toDeadlineLaneTaskClient(task: {
   id: string;
   title: string;
   size: string;
+  state: "open" | "done" | "cancelled";
   estimateMin: number | null;
   effectiveDeadline: string;
 }): DeadlineLaneTaskClient {
@@ -133,6 +136,7 @@ function toDeadlineLaneTaskClient(task: {
     id: task.id,
     title: task.title,
     size: task.size,
+    state: task.state,
     estimateMin: task.estimateMin,
     effectiveDeadline: task.effectiveDeadline
   };

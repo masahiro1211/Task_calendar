@@ -3,6 +3,9 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +71,8 @@ export function TaskDetailSheet({
   const [blocks, setBlocks] = useState<TaskBlockClient[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(false);
   const [size, setSize] = useState<TaskSize>("M");
+  const [body, setBody] = useState("");
+  const [editingBody, setEditingBody] = useState(false);
 
   useEffect(() => {
     if (!task || !open) {
@@ -76,6 +81,8 @@ export function TaskDetailSheet({
     }
 
     setSize(task.size);
+    setBody(task.bodyMd);
+    setEditingBody(task.bodyMd === "");
     setLoadingBlocks(true);
     listTaskBlocksAction(task.id)
       .then((rows) =>
@@ -188,14 +195,48 @@ export function TaskDetailSheet({
               〆切
               <Input defaultValue={task.deadline ?? ""} name="deadline" type="date" />
             </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              メモ
-              <textarea
-                className="min-h-32 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                defaultValue={task.bodyMd}
-                name="bodyMd"
-              />
-            </label>
+            <div className="grid gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">メモ(markdown)</span>
+                <div className="flex rounded-md border p-0.5">
+                  {([
+                    { editing: false, label: "表示" },
+                    { editing: true, label: "編集" }
+                  ] as const).map((mode) => (
+                    <button
+                      className={cn(
+                        "rounded px-2.5 py-0.5 text-xs transition-colors",
+                        editingBody === mode.editing
+                          ? "bg-foreground font-medium text-background"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      key={mode.label}
+                      onClick={() => setEditingBody(mode.editing)}
+                      type="button"
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <input name="bodyMd" type="hidden" value={body} />
+              {editingBody ? (
+                <textarea
+                  className="min-h-40 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onChange={(event) => setBody(event.target.value)}
+                  placeholder={"## 見出し\n- 箇条書き\n- [ ] チェックリスト"}
+                  value={body}
+                />
+              ) : (
+                <div className="markdown-body min-h-40 rounded-md border bg-muted/30 px-3 py-2">
+                  {body.trim() !== "" ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">メモはまだありません。</p>
+                  )}
+                </div>
+              )}
+            </div>
             <Button className="justify-self-start" type="submit">
               保存
             </Button>

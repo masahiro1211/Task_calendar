@@ -146,14 +146,14 @@ maybeDescribe("derived views", () => {
     expect(progress.derived_done_at.toISOString()).toBe("2026-02-04T09:00:00.000Z");
   });
 
-  it("lists only open tasks with effective deadlines in the requested date range", async () => {
+  it("lists open and done tasks with effective deadlines in the requested date range", async () => {
     await sql`
       insert into tasks (id, parent_id, title, size, deadline, state, done_at)
       values
         ('00000000-0000-4000-8000-000000000501', null, 'root deadline', 'L', '2026-07-01', 'open', null),
         ('00000000-0000-4000-8000-000000000502', '00000000-0000-4000-8000-000000000501', 'inherits deadline', 'M', null, 'open', null),
         ('00000000-0000-4000-8000-000000000503', null, 'own deadline', 'S', '2026-07-01', 'open', null),
-        ('00000000-0000-4000-8000-000000000504', null, 'done excluded', 'S', '2026-07-01', 'done', '2026-06-01T00:00:00Z'),
+        ('00000000-0000-4000-8000-000000000504', null, 'done included', 'S', '2026-07-01', 'done', '2026-06-01T00:00:00Z'),
         ('00000000-0000-4000-8000-000000000505', null, 'cancelled excluded', 'S', '2026-07-01', 'cancelled', null),
         ('00000000-0000-4000-8000-000000000506', null, 'outside range', 'S', '2026-07-02', 'open', null),
         ('00000000-0000-4000-8000-000000000507', null, 'no deadline', 'S', null, 'open', null)
@@ -170,8 +170,10 @@ maybeDescribe("derived views", () => {
     expect(laneTasks.map((task) => task.title)).toEqual([
       "root deadline",
       "inherits deadline",
-      "own deadline"
+      "own deadline",
+      "done included"
     ]);
+    expect(laneTasks.find((task) => task.title === "done included")?.state).toBe("done");
     expect(laneTasks.every((task) => task.effectiveDeadline === "2026-07-01")).toBe(true);
   });
 });

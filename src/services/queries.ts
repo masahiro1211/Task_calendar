@@ -37,6 +37,7 @@ export interface CalendarBlock {
   id: string;
   taskId: string;
   title: string;
+  taskState: TaskState;
   startAt: Date;
   endAt: Date;
   rescheduledCount: number;
@@ -54,6 +55,7 @@ export interface DeadlineLaneTask {
   id: string;
   title: string;
   size: TaskSize;
+  state: TaskState;
   estimateMin: number | null;
   effectiveDeadline: string;
 }
@@ -92,6 +94,7 @@ interface CalendarBlockRow {
   id: string;
   task_id: string;
   title: string;
+  task_state: TaskState;
   start_at: Date;
   end_at: Date;
   rescheduled_count: number;
@@ -109,6 +112,7 @@ interface DeadlineLaneTaskRow {
   id: string;
   title: string;
   size: TaskSize;
+  state: TaskState;
   estimate_min: number | null;
   effective_deadline: string;
 }
@@ -220,6 +224,7 @@ export async function listCalendarBlocks({
       b.id,
       b.task_id,
       t.title,
+      t.state::text as task_state,
       b.start_at,
       b.end_at,
       b.rescheduled_count
@@ -234,6 +239,7 @@ export async function listCalendarBlocks({
     id: row.id,
     taskId: row.task_id,
     title: row.title,
+    taskState: row.task_state,
     startAt: row.start_at,
     endAt: row.end_at,
     rescheduledCount: row.rescheduled_count
@@ -277,10 +283,11 @@ export async function listDeadlineLaneTasks(
       id,
       title,
       size::text as size,
+      state::text as state,
       estimate_min,
       effective_deadline::text as effective_deadline
     from v_tasks_resolved
-    where state = 'open'
+    where state in ('open', 'done')
       and effective_deadline is not null
       and effective_deadline >= ${startDate}::date
       and effective_deadline < ${endDate}::date
@@ -291,6 +298,7 @@ export async function listDeadlineLaneTasks(
     id: row.id,
     title: row.title,
     size: row.size,
+    state: row.state,
     estimateMin: row.estimate_min,
     effectiveDeadline: row.effective_deadline
   }));

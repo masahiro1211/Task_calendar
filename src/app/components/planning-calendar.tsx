@@ -10,6 +10,7 @@ import type {
   DateSelectArg
 } from "@fullcalendar/core";
 import jaLocale from "@fullcalendar/core/locales/ja";
+import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, {
   Draggable,
   type EventReceiveArg,
@@ -38,8 +39,10 @@ import { cn } from "@/lib/utils";
 import { formatDateLabel, sizeLabel } from "@/lib/labels";
 import {
   createBlockAction,
+  createTaskAction,
   createTaskWithBlockAction,
   markTaskDoneAction,
+  reopenTaskAction,
   updateBlockAction
 } from "../actions";
 import { TaskDetailSheet, type TaskDetailClient } from "./task-detail-sheet";
@@ -63,6 +66,7 @@ export interface CalendarBlockClient {
   id: string;
   taskId: string;
   title: string;
+  taskState: "open" | "done" | "cancelled";
   startAt: string;
   endAt: string;
   rescheduledCount: number;
@@ -72,6 +76,7 @@ export interface DeadlineLaneTaskClient {
   id: string;
   title: string;
   size: string;
+  state: "open" | "done" | "cancelled";
   estimateMin: number | null;
   effectiveDeadline: string;
 }
@@ -101,6 +106,8 @@ export function PlanningCalendar({
   const [splitTaskId, setSplitTaskId] = useState<string | null>(null);
   const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null);
   const [newTaskSize, setNewTaskSize] = useState<"M" | "S">("M");
+  const [pendingDeadline, setPendingDeadline] = useState<string | null>(null);
+  const [deadlineTaskSize, setDeadlineTaskSize] = useState<"L" | "M" | "S">("L");
 
   useEffect(() => {
     if (!poolRef.current) {
@@ -131,11 +138,12 @@ export function PlanningCalendar({
         editable: false,
         startEditable: false,
         durationEditable: false,
-        classNames: ["deadline-event"],
+        classNames: task.state === "done" ? ["deadline-event", "event-done"] : ["deadline-event"],
         extendedProps: {
           kind: "deadline",
           taskId: task.id,
-          size: task.size
+          size: task.size,
+          state: task.state
         }
       })),
       ...blocks.map((block) => ({
@@ -143,11 +151,13 @@ export function PlanningCalendar({
         title: block.title,
         start: block.startAt,
         end: block.endAt,
-        editable: true,
-        classNames: ["block-event"],
+        editable: block.taskState === "open",
+        classNames:
+          block.taskState === "done" ? ["block-event", "event-done"] : ["block-event"],
         extendedProps: {
           kind: "block",
           taskId: block.taskId,
+          state: block.taskState,
           rescheduledCount: block.rescheduledCount
         }
       }))
@@ -241,6 +251,8 @@ export function PlanningCalendar({
   function selectSlot(arg: DateSelectArg) {
     if (arg.allDay) {
       arg.view.calendar.unselect();
+      setDeadlineTaskSize("L");
+      setPendingDeadline(arg.startStr.slice(0, 10));
       return;
     }
 
@@ -275,32 +287,67 @@ export function PlanningCalendar({
     startTransition(() => router.refresh());
   }
 
-  async function markDeadlineDone(event: React.MouseEvent, taskId: string) {
+  async function createTaskForDeadline(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!pendingDeadline) {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") ?? "").trim();
+
+    if (!title) {
+      return;
+    }
+
+    const payload = new FormData();
+    payload.set("title", title);
+    payload.set("size", deadlineTaskSize);
+    payload.set("deadline", pendingDeadline);
+    await createTaskAction(payload);
+    setPendingDeadline(null);
+    startTransition(() => router.refresh());
+  }
+
+  async function toggleDeadlineDone(event: React.MouseEvent, taskId: string, state: string) {
     event.preventDefault();
     event.stopPropagation();
 
     const formData = new FormData();
     formData.set("taskId", taskId);
-    await markTaskDoneAction(formData);
+
+    try {
+      if (state === "done") {
+        await reopenTaskAction(formData);
+      } else {
+        await markTaskDoneAction(formData);
+      }
+    } catch {
+      return;
+    }
+
     startTransition(() => router.refresh());
   }
 
   function renderEventContent(arg: EventContentArg) {
     if (arg.event.extendedProps.kind === "deadline") {
       const taskId = arg.event.extendedProps.taskId as string;
+      const state = arg.event.extendedProps.state as string;
+      const done = state === "done";
 
       return (
         <div className="deadline-event-content">
           <button
-            aria-label="完了にする"
-            className="deadline-check"
-            onClick={(event) => void markDeadlineDone(event, taskId)}
+            aria-label={done ? "再開する" : "完了にする"}
+            className={cn("deadline-check", done && "deadline-check-done")}
+            onClick={(event) => void toggleDeadlineDone(event, taskId, state)}
             onMouseDown={(event) => event.stopPropagation()}
             type="button"
           >
-            <Check className="h-3 w-3" />
+            {done ? <Check className="h-3 w-3" /> : null}
           </button>
-          <span className="truncate">{arg.event.title}</span>
+          <span className="event-strike truncate">{arg.event.title}</span>
         </div>
       );
     }
@@ -308,7 +355,7 @@ export function PlanningCalendar({
     return (
       <div className="block-event-content">
         {arg.timeText ? <span className="block-event-time">{arg.timeText}</span> : null}
-        <span className="block-event-title truncate">{arg.event.title}</span>
+        <span className="block-event-title event-strike truncate">{arg.event.title}</span>
       </div>
     );
   }
@@ -413,20 +460,20 @@ export function PlanningCalendar({
             headerToolbar={{
               left: "prev,next today",
               center: "title",
-              right: "timeGridDay,timeGridWeek"
+              right: "timeGridDay,timeGridWeek,dayGridMonth"
             }}
             height="100%"
             initialView="timeGridDay"
             locale={jaLocale}
             nowIndicator
-            plugins={[timeGridPlugin, interactionPlugin]}
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             scrollTime={initialScrollTime()}
             selectable
             select={selectSlot}
             selectMirror
             slotDuration="00:30:00"
             slotMaxTime="24:00:00"
-            slotMinTime="06:00:00"
+            slotMinTime="00:00:00"
             timeZone="Asia/Tokyo"
           />
         </div>
@@ -443,6 +490,36 @@ export function PlanningCalendar({
           {splitTask ? (
             <TaskSplit onDone={() => setSplitTaskId(null)} parentId={splitTask.id} />
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog onOpenChange={(open) => !open && setPendingDeadline(null)} open={pendingDeadline !== null}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              〆切 {pendingDeadline ? formatDateLabel(pendingDeadline) : ""} のタスクを作成
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            この日が〆切のタスクとして登録します。「大」はあとで分割してから配置します。
+          </p>
+          <form className="grid gap-3" onSubmit={(event) => void createTaskForDeadline(event)}>
+            <Input autoFocus name="title" placeholder="タスク名" required />
+            <Select
+              onValueChange={(value) => setDeadlineTaskSize(value as "L" | "M" | "S")}
+              value={deadlineTaskSize}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="L">大:分割して進める</SelectItem>
+                <SelectItem value="M">中</SelectItem>
+                <SelectItem value="S">小</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button type="submit">作成</Button>
+          </form>
         </DialogContent>
       </Dialog>
 
