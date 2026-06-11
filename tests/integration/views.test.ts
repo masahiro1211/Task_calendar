@@ -22,12 +22,12 @@ maybeDescribe("derived views", () => {
     await closeIsolatedTestSql(sql);
   });
 
-  it("v_pool includes only open M/S leaves without future blocks", async () => {
+  it("v_pool includes only open M/S leaves without any blocks", async () => {
     await sql`
       insert into tasks (id, parent_id, title, size, state, done_at)
       values
         ('00000000-0000-4000-8000-000000000001', null, 'included m leaf', 'M', 'open', null),
-        ('00000000-0000-4000-8000-000000000002', null, 'included past-block s leaf', 'S', 'open', null),
+        ('00000000-0000-4000-8000-000000000002', null, 'excluded past-block s leaf', 'S', 'open', null),
         ('00000000-0000-4000-8000-000000000003', null, 'excluded l leaf', 'L', 'open', null),
         ('00000000-0000-4000-8000-000000000004', null, 'excluded non-leaf', 'M', 'open', null),
         ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000004', 'child keeps parent non-leaf', 'L', 'open', null),
@@ -47,10 +47,7 @@ maybeDescribe("derived views", () => {
       select title from v_pool order by title
     `;
 
-    expect(pool.map((row) => row.title)).toEqual([
-      "included m leaf",
-      "included past-block s leaf"
-    ]);
+    expect(pool.map((row) => row.title)).toEqual(["included m leaf"]);
   });
 
   it("v_tasks_resolved inherits ancestor deadlines until explicitly overridden", async () => {

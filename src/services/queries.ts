@@ -313,13 +313,13 @@ export async function listDeadlineLaneTasks(
       and t.effective_deadline is not null
       and t.effective_deadline >= ${startDate}::date
       and t.effective_deadline < ${endDate}::date
-      -- カレンダーに配置済み(未来ブロックあり)の葉タスクはレーンに出さない
+      -- カレンダーに配置済み(ブロックあり)の葉タスクはレーンに出さない
       and not (
         t.state = 'open'
         and t.is_leaf
         and exists (
           select 1 from blocks b
-          where b.task_id = t.id and b.end_at > now()
+          where b.task_id = t.id
         )
       )
     order by t.effective_deadline, t.path

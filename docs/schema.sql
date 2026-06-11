@@ -123,7 +123,7 @@ select t.*,
        not exists (select 1 from tasks c where c.parent_id = t.id) as is_leaf
 from v_tasks_resolved t;
 
--- 配置プール: open・葉・M/S・未来のブロックを持たない
+-- 配置プール: open・葉・M/S・ブロック未配置(配置済みはプールに出さない)
 create view v_pool as
 select l.*
 from v_leaves l
@@ -132,7 +132,7 @@ where l.is_leaf
   and l.size <> 'L'
   and not exists (
     select 1 from blocks b
-    where b.task_id = l.id and b.end_at > now()
+    where b.task_id = l.id
   )
 order by l.effective_deadline nulls last, l.size, l.sort_order;
 

@@ -17,7 +17,7 @@ import interactionPlugin, {
   type EventResizeDoneArg
 } from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
-import { Check, GripVertical, Scissors } from "lucide-react";
+import { Check, GripVertical, Scissors, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ import {
   completeTaskTreeAction,
   createBlockAction,
   createTaskAction,
+  deleteBlockAction,
   markTaskDoneAction,
   reopenTaskAction,
   updateBlockAction,
@@ -337,6 +338,19 @@ export function PlanningCalendar({
     startTransition(() => router.refresh());
   }
 
+  async function removeBlock(event: React.MouseEvent, blockId: string) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      await deleteBlockAction(blockId);
+    } catch {
+      return;
+    }
+
+    startTransition(() => router.refresh());
+  }
+
   async function toggleDeadlineDone(
     event: React.MouseEvent,
     taskId: string,
@@ -397,6 +411,15 @@ export function PlanningCalendar({
 
     return (
       <div className="block-event-content">
+        <button
+          aria-label="予定を削除"
+          className="block-event-delete"
+          onClick={(event) => void removeBlock(event, arg.event.id)}
+          onMouseDown={(event) => event.stopPropagation()}
+          type="button"
+        >
+          <X className="h-3 w-3" />
+        </button>
         {arg.timeText ? <span className="block-event-time">{arg.timeText}</span> : null}
         <span className="block-event-title event-strike truncate">{arg.event.title}</span>
       </div>
