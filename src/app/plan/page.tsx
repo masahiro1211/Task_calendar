@@ -1,7 +1,4 @@
-import Link from "next/link";
 import { hasDatabaseUrl } from "@/db/client";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   listCalendarBlocks,
   listDeadlineLaneTasks,
@@ -14,6 +11,7 @@ import {
   PlanningCalendar,
   type CalendarBlockClient,
   type DeadlineLaneTaskClient,
+  type NeedsSplitTaskClient,
   type PoolTaskClient
 } from "../components/planning-calendar";
 import type { TaskDetailClient } from "../components/task-detail-sheet";
@@ -36,19 +34,11 @@ export default async function PlanPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <AppHeader active="plan">
-        <Button asChild variant="outline">
-          <Link href="/tasks">
-            Needs split
-            <Badge variant={needsSplit.length > 0 ? "destructive" : "outline"}>
-              {needsSplit.length}
-            </Badge>
-          </Link>
-        </Button>
-      </AppHeader>
+      <AppHeader active="plan" />
       <PlanningCalendar
         blocks={blocks.map(toCalendarBlockClient)}
         deadlineTasks={deadlineTasks.map(toDeadlineLaneTaskClient)}
+        needsSplitTasks={needsSplit.map(toNeedsSplitTaskClient)}
         poolTasks={poolTasks.filter(isPoolTaskClient)}
         tasks={tasks.map(toTaskDetailClient)}
       />
@@ -61,13 +51,25 @@ function MissingDatabase() {
     <main className="grid min-h-screen place-items-center bg-background p-6">
       <section className="max-w-xl rounded-md border bg-card p-6">
         <p className="text-xs font-semibold uppercase text-muted-foreground">Task Calendar</p>
-        <h1 className="mt-1 text-xl font-semibold">DATABASE_URL is not configured.</h1>
+        <h1 className="mt-1 text-xl font-semibold">DATABASE_URL が設定されていません。</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Set a Postgres connection string to use the task planner.
+          Postgres の接続文字列を設定するとプランナーを利用できます。
         </p>
       </section>
     </main>
   );
+}
+
+function toNeedsSplitTaskClient(task: {
+  id: string;
+  title: string;
+  effectiveDeadline: string | null;
+}): NeedsSplitTaskClient {
+  return {
+    id: task.id,
+    title: task.title,
+    effectiveDeadline: task.effectiveDeadline
+  };
 }
 
 function calendarRange(now: Date) {

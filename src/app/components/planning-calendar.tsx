@@ -9,13 +9,14 @@ import type {
   EventInput,
   DateSelectArg
 } from "@fullcalendar/core";
+import jaLocale from "@fullcalendar/core/locales/ja";
 import interactionPlugin, {
   Draggable,
   type EventReceiveArg,
   type EventResizeDoneArg
 } from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
-import { Check, GripVertical } from "lucide-react";
+import { Check, GripVertical, Scissors } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { formatDateLabel, sizeLabel } from "@/lib/labels";
 import {
   createBlockAction,
   createTaskWithBlockAction,
@@ -41,12 +43,19 @@ import {
   updateBlockAction
 } from "../actions";
 import { TaskDetailSheet, type TaskDetailClient } from "./task-detail-sheet";
+import { TaskSplit } from "./task-split";
 
 export interface PoolTaskClient {
   id: string;
   title: string;
   size: "M" | "S";
   estimateMin: number | null;
+  effectiveDeadline: string | null;
+}
+
+export interface NeedsSplitTaskClient {
+  id: string;
+  title: string;
   effectiveDeadline: string | null;
 }
 
@@ -74,11 +83,13 @@ interface PendingSelection {
 
 export function PlanningCalendar({
   poolTasks,
+  needsSplitTasks,
   blocks,
   deadlineTasks,
   tasks
 }: {
   poolTasks: PoolTaskClient[];
+  needsSplitTasks: NeedsSplitTaskClient[];
   blocks: CalendarBlockClient[];
   deadlineTasks: DeadlineLaneTaskClient[];
   tasks: TaskDetailClient[];
@@ -87,6 +98,7 @@ export function PlanningCalendar({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [splitTaskId, setSplitTaskId] = useState<string | null>(null);
   const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null);
   const [newTaskSize, setNewTaskSize] = useState<"M" | "S">("M");
 
@@ -107,6 +119,7 @@ export function PlanningCalendar({
   }, [poolTasks]);
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+  const splitTask = needsSplitTasks.find((task) => task.id === splitTaskId) ?? null;
 
   const events = useMemo<EventInput[]>(
     () => [
@@ -279,7 +292,7 @@ export function PlanningCalendar({
       return (
         <div className="deadline-event-content">
           <button
-            aria-label="Mark done"
+            aria-label="完了にする"
             className="deadline-check"
             onClick={(event) => void markDeadlineDone(event, taskId)}
             onMouseDown={(event) => event.stopPropagation()}
@@ -302,16 +315,57 @@ export function PlanningCalendar({
 
   return (
     <>
-      <section className="grid h-[calc(100vh-3.5rem)] min-h-[640px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden max-lg:h-auto max-lg:grid-cols-1">
-        <aside className="min-h-0 border-r bg-muted/50 max-lg:border-b max-lg:border-r-0">
-          <div className="flex h-12 items-center justify-between border-b px-3">
-            <h2 className="text-sm font-semibold">Pool</h2>
+      <section className="grid h-[calc(100vh-3.5rem)] min-h-[640px] grid-cols-[300px_minmax(0,1fr)] overflow-hidden max-lg:h-auto max-lg:grid-cols-1">
+        <aside className="flex min-h-0 flex-col border-r bg-muted/50 max-lg:border-b max-lg:border-r-0">
+          {needsSplitTasks.length > 0 ? (
+            <div className="shrink-0 border-b">
+              <div className="flex h-10 items-center justify-between px-3">
+                <h2 className="text-xs font-semibold text-muted-foreground">
+                  分割待ちの元タスク
+                </h2>
+                <Badge variant="outline">{needsSplitTasks.length}</Badge>
+              </div>
+              <div className="grid max-h-56 gap-2 overflow-y-auto px-3 pb-3">
+                {needsSplitTasks.map((task) => (
+                  <div className="rounded-lg border bg-card p-3 shadow-sm" key={task.id}>
+                    <button
+                      className="block w-full truncate text-left text-sm font-medium hover:underline"
+                      onClick={() => setSelectedTaskId(task.id)}
+                      type="button"
+                    >
+                      {task.title}
+                    </button>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          "text-xs text-muted-foreground",
+                          task.effectiveDeadline ? urgencyText(task.effectiveDeadline) : undefined
+                        )}
+                      >
+                        {task.effectiveDeadline
+                          ? `〆切 ${formatDateLabel(task.effectiveDeadline)}`
+                          : "〆切なし"}
+                      </span>
+                      <Button onClick={() => setSplitTaskId(task.id)} size="sm" variant="outline">
+                        <Scissors className="h-3.5 w-3.5" />
+                        分割する
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div className="flex h-10 shrink-0 items-center justify-between border-b px-3">
+            <h2 className="text-xs font-semibold text-muted-foreground">
+              未配置(ドラッグで配置)
+            </h2>
             <Badge variant="outline">{poolTasks.length}</Badge>
           </div>
-          <div className="h-[calc(100%-3rem)] overflow-y-auto p-3" ref={poolRef}>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3" ref={poolRef}>
             {poolTasks.length === 0 ? (
               <p className="px-2 py-10 text-center text-sm text-muted-foreground">
-                No unscheduled tasks
+                未配置のタスクはありません
               </p>
             ) : null}
             <div className="grid gap-2">
@@ -332,12 +386,12 @@ export function PlanningCalendar({
                   </div>
                   <div className="flex items-center gap-2 pl-6 text-xs text-muted-foreground">
                     <Badge className="px-1.5 py-0 font-semibold" variant="outline">
-                      {task.size}
+                      {sizeLabel(task.size)}
                     </Badge>
-                    {task.estimateMin ? <span>{task.estimateMin}m</span> : null}
+                    {task.estimateMin ? <span>{task.estimateMin}分</span> : null}
                     {task.effectiveDeadline ? (
                       <span className={urgencyText(task.effectiveDeadline)}>
-                        due {task.effectiveDeadline}
+                        〆切 {formatDateLabel(task.effectiveDeadline)}
                       </span>
                     ) : null}
                   </div>
@@ -363,7 +417,7 @@ export function PlanningCalendar({
             }}
             height="100%"
             initialView="timeGridDay"
-            locale="ja"
+            locale={jaLocale}
             nowIndicator
             plugins={[timeGridPlugin, interactionPlugin]}
             scrollTime={initialScrollTime()}
@@ -378,23 +432,39 @@ export function PlanningCalendar({
         </div>
       </section>
 
+      <Dialog onOpenChange={(open) => !open && setSplitTaskId(null)} open={splitTask !== null}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>「{splitTask?.title}」を分割</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            中・小タスクに分割すると「未配置」に入り、カレンダーへドラッグして配置できます。
+          </p>
+          {splitTask ? (
+            <TaskSplit onDone={() => setSplitTaskId(null)} parentId={splitTask.id} />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       <Dialog onOpenChange={(open) => !open && setPendingSelection(null)} open={pendingSelection !== null}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create task in selected slot</DialogTitle>
+            <DialogTitle>
+              {pendingSelection ? formatSelectionRange(pendingSelection) : ""}にタスクを作成
+            </DialogTitle>
           </DialogHeader>
           <form className="grid gap-3" onSubmit={(event) => void createTaskForSelection(event)}>
-            <Input autoFocus name="title" placeholder="Title" required />
+            <Input autoFocus name="title" placeholder="タスク名" required />
             <Select onValueChange={(value) => setNewTaskSize(value as "M" | "S")} value={newTaskSize}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="M">M</SelectItem>
-                <SelectItem value="S">S</SelectItem>
+                <SelectItem value="M">中</SelectItem>
+                <SelectItem value="S">小</SelectItem>
               </SelectContent>
             </Select>
-            <Button type="submit">Create</Button>
+            <Button type="submit">作成して配置</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -428,6 +498,18 @@ function initialScrollTime() {
   now.setHours(now.getHours() - 1);
 
   return `${String(now.getHours()).padStart(2, "0")}:00:00`;
+}
+
+function formatSelectionRange(selection: PendingSelection) {
+  const formatter = new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Tokyo"
+  });
+
+  return `${formatter.format(new Date(selection.startAt))}〜${formatter.format(
+    new Date(selection.endAt)
+  )}`;
 }
 
 function urgencyBorder(deadline: string | null) {

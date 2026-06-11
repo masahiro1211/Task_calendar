@@ -14,6 +14,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { formatDateLabel, sizeLabel, stateLabel } from "@/lib/labels";
 import {
   deleteBlockAction,
   listTaskBlocksAction,
@@ -128,17 +129,25 @@ export function TaskDetailSheet({
         <SheetHeader>
           <SheetTitle>{task.title}</SheetTitle>
           <div className="flex flex-wrap gap-2">
-            <Badge variant={task.state === "done" ? "secondary" : "outline"}>{task.state}</Badge>
-            <Badge variant="outline">{task.size}</Badge>
+            <Badge variant={task.state === "done" ? "secondary" : "outline"}>
+              {stateLabel(task.state)}
+            </Badge>
+            <Badge variant="outline">{sizeLabel(task.size)}</Badge>
             {task.effectiveDeadline ? (
-              <Badge variant="outline">due {task.effectiveDeadline}</Badge>
+              <Badge variant="outline">〆切 {formatDateLabel(task.effectiveDeadline)}</Badge>
             ) : null}
           </div>
         </SheetHeader>
 
         <div className="mt-6 grid gap-6">
           {task.state === "open" ? (
-            <div className="border-b pb-6">
+            <div className="grid gap-3 border-b pb-6">
+              <div>
+                <h3 className="text-sm font-semibold">子タスクへ分割</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  分割した中・小タスクは「未配置」からカレンダーへドラッグできます。
+                </p>
+              </div>
               <TaskSplit onDone={() => onOpenChange(false)} parentId={task.id} />
             </div>
           ) : null}
@@ -147,40 +156,40 @@ export function TaskDetailSheet({
             <input name="taskId" type="hidden" value={task.id} />
             <input name="size" type="hidden" value={size} />
             <label className="grid gap-1.5 text-sm font-medium">
-              Title
+              タイトル
               <Input defaultValue={task.title} name="title" required />
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1.5 text-sm font-medium">
-                Size
+                サイズ
                 <Select onValueChange={(value) => setSize(value as TaskSize)} value={size}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="L">L</SelectItem>
-                    <SelectItem value="M">M</SelectItem>
-                    <SelectItem value="S">S</SelectItem>
+                    <SelectItem value="L">大</SelectItem>
+                    <SelectItem value="M">中</SelectItem>
+                    <SelectItem value="S">小</SelectItem>
                   </SelectContent>
                 </Select>
               </label>
               <label className="grid gap-1.5 text-sm font-medium">
-                Estimate
+                見積(分)
                 <Input
                   defaultValue={task.estimateMin ?? ""}
                   min="1"
                   name="estimateMin"
-                  placeholder="min"
+                  placeholder="分"
                   type="number"
                 />
               </label>
             </div>
             <label className="grid gap-1.5 text-sm font-medium">
-              Deadline
+              〆切
               <Input defaultValue={task.deadline ?? ""} name="deadline" type="date" />
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
-              Body
+              メモ
               <textarea
                 className="min-h-32 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 defaultValue={task.bodyMd}
@@ -188,7 +197,7 @@ export function TaskDetailSheet({
               />
             </label>
             <Button className="justify-self-start" type="submit">
-              Save
+              保存
             </Button>
           </form>
 
@@ -197,7 +206,7 @@ export function TaskDetailSheet({
               <form action={markTaskDoneAction}>
                 <input name="taskId" type="hidden" value={task.id} />
                 <Button type="submit" variant="secondary">
-                  Done
+                  完了にする
                 </Button>
               </form>
             ) : null}
@@ -205,7 +214,7 @@ export function TaskDetailSheet({
               <form action={reopenTaskAction}>
                 <input name="taskId" type="hidden" value={task.id} />
                 <Button type="submit" variant="secondary">
-                  Reopen
+                  再開する
                 </Button>
               </form>
             ) : null}
@@ -213,12 +222,12 @@ export function TaskDetailSheet({
 
           <section className="grid gap-3 border-t pt-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Blocks</h3>
+              <h3 className="text-sm font-semibold">カレンダーの予定</h3>
               <Badge variant="outline">{blocks.length}</Badge>
             </div>
-            {loadingBlocks ? <p className="text-sm text-muted-foreground">Loading...</p> : null}
+            {loadingBlocks ? <p className="text-sm text-muted-foreground">読み込み中…</p> : null}
             {!loadingBlocks && blocks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No blocks.</p>
+              <p className="text-sm text-muted-foreground">まだ配置されていません。</p>
             ) : null}
             <div className="grid gap-2">
               {blocks.map((block) => (
@@ -229,7 +238,7 @@ export function TaskDetailSheet({
                   <div>
                     <p className="text-sm font-medium">{formatBlockRange(block)}</p>
                     <p className="text-xs text-muted-foreground">
-                      rescheduled {block.rescheduledCount}
+                      リスケ {block.rescheduledCount} 回
                     </p>
                   </div>
                   <Button
@@ -240,7 +249,7 @@ export function TaskDetailSheet({
                     variant="outline"
                   >
                     <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete block</span>
+                    <span className="sr-only">予定を削除</span>
                   </Button>
                 </div>
               ))}

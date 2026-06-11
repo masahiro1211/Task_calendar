@@ -19,8 +19,8 @@ export function AppHeader({
         <span className="text-sm font-semibold tracking-tight">Task Calendar</span>
       </div>
       <nav className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
-        <HeaderTab active={active === "plan"} href="/plan" label="Plan" />
-        <HeaderTab active={active === "tasks"} href="/tasks" label="Tasks" />
+        <HeaderTab active={active === "plan"} href="/plan" label="プラン" />
+        <HeaderTab active={active === "tasks"} href="/tasks" label="タスク" />
       </nav>
       <QuickAddForm />
       {children}
