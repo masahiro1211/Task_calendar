@@ -294,25 +294,31 @@ export function PlanningCalendar({
 
     return (
       <div className="block-event-content">
-        <span className="truncate">{arg.event.title}</span>
+        {arg.timeText ? <span className="block-event-time">{arg.timeText}</span> : null}
+        <span className="block-event-title truncate">{arg.event.title}</span>
       </div>
     );
   }
 
   return (
     <>
-      <section className="grid h-[calc(100vh-4rem)] min-h-[640px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden max-lg:h-auto max-lg:grid-cols-1">
+      <section className="grid h-[calc(100vh-3.5rem)] min-h-[640px] grid-cols-[280px_minmax(0,1fr)] overflow-hidden max-lg:h-auto max-lg:grid-cols-1">
         <aside className="min-h-0 border-r bg-card max-lg:border-b max-lg:border-r-0">
           <div className="flex h-12 items-center justify-between border-b px-3">
             <h2 className="text-sm font-semibold">Pool</h2>
             <Badge variant="outline">{poolTasks.length}</Badge>
           </div>
           <div className="h-[calc(100%-3rem)] overflow-y-auto p-3" ref={poolRef}>
+            {poolTasks.length === 0 ? (
+              <p className="px-2 py-10 text-center text-sm text-muted-foreground">
+                No unscheduled tasks
+              </p>
+            ) : null}
             <div className="grid gap-2">
               {poolTasks.map((task) => (
                 <div
                   className={cn(
-                    "pool-item grid cursor-grab gap-1 rounded-md border bg-background p-3 shadow-sm active:cursor-grabbing",
+                    "pool-item grid cursor-grab gap-1.5 rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
                     urgencyBorder(task.effectiveDeadline)
                   )}
                   data-estimate-min={task.estimateMin ?? defaultEstimate(task.size)}
@@ -321,20 +327,26 @@ export function PlanningCalendar({
                   key={task.id}
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <strong className="truncate text-sm">{task.title}</strong>
+                    <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="truncate text-sm font-medium">{task.title}</span>
                   </div>
-                  <span className="pl-6 text-xs text-muted-foreground">
-                    {task.size}
-                    {task.estimateMin ? ` / ${task.estimateMin}m` : ""}
-                    {task.effectiveDeadline ? ` / due ${task.effectiveDeadline}` : ""}
-                  </span>
+                  <div className="flex items-center gap-2 pl-6 text-xs text-muted-foreground">
+                    <Badge className="px-1.5 py-0 font-semibold" variant="outline">
+                      {task.size}
+                    </Badge>
+                    {task.estimateMin ? <span>{task.estimateMin}m</span> : null}
+                    {task.effectiveDeadline ? (
+                      <span className={urgencyText(task.effectiveDeadline)}>
+                        due {task.effectiveDeadline}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </aside>
-        <div className="min-w-0 overflow-hidden p-3">
+        <div className="min-w-0 overflow-hidden p-4">
           <FullCalendar
             allDaySlot
             editable
@@ -436,6 +448,22 @@ function urgencyBorder(deadline: string | null) {
   }
 
   return "border-l-4 border-l-slate-300";
+}
+
+function urgencyText(deadline: string) {
+  const today = tokyoDateString(new Date());
+  const tomorrow = tokyoDateString(addDays(new Date(), 1));
+  const threeDays = tokyoDateString(addDays(new Date(), 3));
+
+  if (deadline <= tomorrow || deadline < today) {
+    return "font-semibold text-red-600";
+  }
+
+  if (deadline <= threeDays) {
+    return "font-medium text-amber-600";
+  }
+
+  return "";
 }
 
 function addDays(date: Date, days: number) {

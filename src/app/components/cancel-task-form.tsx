@@ -27,8 +27,13 @@ export function CancelTaskForm({
       }}
     >
       <input name="taskId" type="hidden" value={taskId} />
-      <Button size="icon" type="submit" variant="ghost">
-        <Ban className="h-4 w-4 text-destructive" />
+      <Button
+        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        size="icon"
+        type="submit"
+        variant="ghost"
+      >
+        <Ban className="h-4 w-4" />
         <span className="sr-only">Cancel task</span>
       </Button>
     </form>
