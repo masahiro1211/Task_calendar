@@ -41,10 +41,10 @@ import {
   completeTaskTreeAction,
   createBlockAction,
   createTaskAction,
-  createTaskWithBlockAction,
   markTaskDoneAction,
   reopenTaskAction,
-  updateBlockAction
+  updateBlockAction,
+  updateTaskDeadlineAction
 } from "../actions";
 import { TaskDetailSheet, type TaskDetailClient } from "./task-detail-sheet";
 import { TaskSplit } from "./task-split";
@@ -83,11 +83,6 @@ export interface DeadlineLaneTaskClient {
   effectiveDeadline: string;
 }
 
-interface PendingSelection {
-  startAt: string;
-  endAt: string;
-}
-
 export function PlanningCalendar({
   poolTasks,
   needsSplitTasks,
@@ -106,8 +101,6 @@ export function PlanningCalendar({
   const [, startTransition] = useTransition();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [splitTaskId, setSplitTaskId] = useState<string | null>(null);
-  const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null);
-  const [newTaskSize, setNewTaskSize] = useState<"M" | "S">("M");
   const [pendingDeadline, setPendingDeadline] = useState<string | null>(null);
   const [deadlineTaskSize, setDeadlineTaskSize] = useState<"L" | "M" | "S">("L");
 
@@ -133,15 +126,15 @@ export function PlanningCalendar({
   const events = useMemo<EventInput[]>(
     () => [
       ...deadlineTasks.map((task) => {
-        const placeable = task.state === "open" && task.isLeaf && task.size !== "L";
+        const movable = task.state === "open";
 
         return {
           id: `deadline:${task.id}`,
           title: task.title,
           start: task.effectiveDeadline,
           allDay: true,
-          editable: placeable,
-          startEditable: placeable,
+          editable: movable,
+          startEditable: movable,
           durationEditable: false,
           classNames:
             task.state === "done" ? ["deadline-event", "event-done"] : ["deadline-event"],
@@ -229,20 +222,38 @@ export function PlanningCalendar({
     }
   }
 
-  // 終日レーンの中・小タスクを時間グリッドへドラッグ → その時刻にブロックを作成。
-  // 〆切マーカー自体は動かさないので、イベントは必ず元の位置へ戻す。
+  // 終日レーンのドラッグ:
+  // - 別の日の終日レーンへ → 〆切日を変更
+  // - 時間グリッドへ(中・小の葉のみ) → その時刻にブロックを作成、〆切マーカーは残す
   async function placeDeadlineTask(arg: EventDropArg) {
     const startAt = arg.event.start;
     const taskId = arg.event.extendedProps.taskId;
 
-    if (arg.event.allDay || !startAt || typeof taskId !== "string") {
+    if (!startAt || typeof taskId !== "string") {
+      arg.revert();
+      return;
+    }
+
+    if (arg.event.allDay) {
+      try {
+        await updateTaskDeadlineAction(taskId, arg.event.startStr.slice(0, 10));
+        startTransition(() => router.refresh());
+      } catch {
+        arg.revert();
+      }
+      return;
+    }
+
+    const isLeaf = arg.event.extendedProps.isLeaf !== false;
+    const size = arg.event.extendedProps.size;
+
+    if (!isLeaf || size === "L") {
       arg.revert();
       return;
     }
 
     const estimateMin =
-      Number(arg.event.extendedProps.estimateMin) ||
-      defaultEstimate(arg.event.extendedProps.size === "S" ? "S" : "M");
+      Number(arg.event.extendedProps.estimateMin) || defaultEstimate(size === "S" ? "S" : "M");
     const endAt = new Date(startAt.getTime() + estimateMin * 60_000);
 
     try {
@@ -293,42 +304,14 @@ export function PlanningCalendar({
   }
 
   function selectSlot(arg: DateSelectArg) {
-    if (arg.allDay) {
-      arg.view.calendar.unselect();
-      setDeadlineTaskSize("L");
-      setPendingDeadline(arg.startStr.slice(0, 10));
+    arg.view.calendar.unselect();
+
+    if (!arg.allDay) {
       return;
     }
 
-    setNewTaskSize("M");
-    setPendingSelection({
-      startAt: arg.start.toISOString(),
-      endAt: arg.end.toISOString()
-    });
-  }
-
-  async function createTaskForSelection(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!pendingSelection) {
-      return;
-    }
-
-    const formData = new FormData(event.currentTarget);
-    const title = String(formData.get("title") ?? "").trim();
-
-    if (!title) {
-      return;
-    }
-
-    await createTaskWithBlockAction({
-      title,
-      size: newTaskSize,
-      startAt: pendingSelection.startAt,
-      endAt: pendingSelection.endAt
-    });
-    setPendingSelection(null);
-    startTransition(() => router.refresh());
+    setDeadlineTaskSize("L");
+    setPendingDeadline(arg.startStr.slice(0, 10));
   }
 
   async function createTaskForDeadline(event: React.FormEvent<HTMLFormElement>) {
@@ -530,7 +513,6 @@ export function PlanningCalendar({
             scrollTime={initialScrollTime()}
             selectable
             select={selectSlot}
-            selectMirror
             slotDuration="00:30:00"
             slotMaxTime="24:00:00"
             slotMinTime="00:00:00"
@@ -583,29 +565,6 @@ export function PlanningCalendar({
         </DialogContent>
       </Dialog>
 
-      <Dialog onOpenChange={(open) => !open && setPendingSelection(null)} open={pendingSelection !== null}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {pendingSelection ? formatSelectionRange(pendingSelection) : ""}にタスクを作成
-            </DialogTitle>
-          </DialogHeader>
-          <form className="grid gap-3" onSubmit={(event) => void createTaskForSelection(event)}>
-            <Input autoFocus name="title" placeholder="タスク名" required />
-            <Select onValueChange={(value) => setNewTaskSize(value as "M" | "S")} value={newTaskSize}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="M">中</SelectItem>
-                <SelectItem value="S">小</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button type="submit">作成して配置</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       <TaskDetailSheet
         onOpenChange={(open) => {
           if (!open) {
@@ -635,18 +594,6 @@ function initialScrollTime() {
   now.setHours(now.getHours() - 1);
 
   return `${String(now.getHours()).padStart(2, "0")}:00:00`;
-}
-
-function formatSelectionRange(selection: PendingSelection) {
-  const formatter = new Intl.DateTimeFormat("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Tokyo"
-  });
-
-  return `${formatter.format(new Date(selection.startAt))}〜${formatter.format(
-    new Date(selection.endAt)
-  )}`;
 }
 
 function urgencyBorder(deadline: string | null) {

@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { hasDatabaseUrl } from "@/db/client";
-import { Button } from "@/components/ui/button";
 import { listTaskTree } from "@/services/queries";
 import { AppHeader } from "../components/app-header";
+import { QuickAddForm } from "../components/quick-add-form";
 import { TaskTree } from "../components/task-tree";
 import type { TaskDetailClient } from "../components/task-detail-sheet";
 
@@ -30,11 +29,7 @@ export default async function TasksPage({
   return (
     <main className="min-h-screen bg-background text-foreground">
       <AppHeader active="tasks">
-        <Button asChild variant={includeCancelled ? "secondary" : "outline"}>
-          <Link href={includeCancelled ? "/tasks" : "/tasks?cancelled=1"}>
-            {includeCancelled ? "中止を隠す" : "中止も表示"}
-          </Link>
-        </Button>
+        <QuickAddForm />
       </AppHeader>
       <section className="mx-auto max-w-5xl p-5">
         <TaskTree tasks={tasks.map(toTaskDetailClient)} />

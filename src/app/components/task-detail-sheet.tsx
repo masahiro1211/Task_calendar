@@ -276,12 +276,7 @@ export function TaskDetailSheet({
                   className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border bg-background p-3"
                   key={block.id}
                 >
-                  <div>
-                    <p className="text-sm font-medium">{formatBlockRange(block)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      リスケ {block.rescheduledCount} 回
-                    </p>
-                  </div>
+                  <p className="text-sm font-medium">{formatBlockRange(block)}</p>
                   <Button
                     disabled={isPending}
                     onClick={() => void deleteBlock(block.id)}

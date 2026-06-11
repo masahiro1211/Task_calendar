@@ -92,6 +92,19 @@ export async function markTaskDoneAction(formData: FormData) {
   revalidatePlannerPaths();
 }
 
+export async function updateTaskDeadlineAction(taskId: string, deadline: string) {
+  if (!taskId) {
+    throw new Error("taskId is required.");
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+    throw new Error("Invalid deadline date.");
+  }
+
+  await taskService().updateTaskDeadline(taskId, deadline);
+  revalidatePlannerPaths();
+}
+
 export async function completeTaskTreeAction(formData: FormData) {
   await taskService().completeSubtree(requiredString(formData.get("taskId"), "taskId"));
   revalidatePlannerPaths();

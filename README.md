@@ -6,14 +6,14 @@ Next.js、PostgreSQL、raw SQL で作る個人用タスクスケジューラで�
 
 ## 現在の実装範囲
 
-- `/plan`: 左に `v_pool` ベースの Pool、右に FullCalendar を置くデイリープランニング画面
+- `/plan`: 左に分割待ち+未配置プール、右に FullCalendar(日/週/月、24時間、Asia/Tokyo)
 - `/tasks`: タスクツリーの作成、編集、分割、done、reopen、cancel
-- タスク編集はインライン展開ではなく Sheet に集約
-- FullCalendar の日/週ビュー、now indicator、Asia/Tokyo 表示
-- Pool からカレンダーへの external drag/drop 配置
-- カレンダーブロックのドラッグ移動、リサイズ、Sheet 内からの削除
-- 空きスロット選択から task + block を 1 transaction で作成
-- `v_tasks_resolved.effective_deadline` に基づく all-day 締切レーン
+- タスク編集はインライン展開ではなく Sheet に集約(メモは markdown 表示/編集)
+- 登録は「終日レーン/日付セルのクリック → その日を〆切にタスク作成」が基本線
+- 終日レーンの〆切マーカーは、横ドラッグで〆切日変更、時間グリッドへのドラッグでブロック配置
+- Pool からカレンダーへの external drag/drop 配置、ブロックのドラッグ移動・リサイズ
+- 完了タスクは消さず打消し線表示。チェックでトグル、親のチェックは子をまとめて完了
+- `v_tasks_resolved.effective_deadline` に基づく all-day 締切レーン(親の完了は子から導出)
 - service 層の不変条件と integration test
 
 まだ未実装: Google Calendar 連携、認証、PWA、分析機能、Obsidian 移行スクリプト。

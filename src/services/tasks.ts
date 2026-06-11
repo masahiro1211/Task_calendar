@@ -295,6 +295,35 @@ export function createTaskService({
       return mapTask(task);
     },
 
+    async updateTaskDeadline(taskId: string, deadline: string | null) {
+      const existing = await getTask(sql, taskId);
+
+      if (existing.state !== "open") {
+        throw new TaskServiceError("Only open tasks can change deadline.");
+      }
+
+      const [task] = await sql<TaskRow[]>`
+        update tasks
+        set deadline = ${deadline}
+        where id = ${taskId}
+        returning
+          id,
+          parent_id,
+          title,
+          body_md,
+          size::text as size,
+          estimate_min,
+          deadline::text as deadline,
+          state::text as state,
+          done_at,
+          sort_order,
+          created_at,
+          updated_at
+      `;
+
+      return mapTask(task);
+    },
+
     async completeSubtree(taskId: string) {
       return sql.begin(async (tx) => {
         await getTask(tx, taskId);

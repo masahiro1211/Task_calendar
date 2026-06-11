@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { QuickAddForm } from "./quick-add-form";
 
 export function AppHeader({
   active,
@@ -22,7 +21,6 @@ export function AppHeader({
         <HeaderTab active={active === "plan"} href="/plan" label="プラン" />
         <HeaderTab active={active === "tasks"} href="/tasks" label="タスク" />
       </nav>
-      <QuickAddForm />
       {children}
     </header>
   );
