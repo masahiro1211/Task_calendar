@@ -57,7 +57,7 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
           return (
             <article
               className={cn(
-                "grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5",
+                "grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 transition-colors hover:bg-muted/30",
                 task.state === "done" && "bg-muted/40 text-muted-foreground",
                 task.state === "cancelled" && "bg-muted/60 text-muted-foreground"
               )}
@@ -103,14 +103,26 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 {task.state === "open" ? (
-                  <Button onClick={() => setSelectedTaskId(task.id)} size="icon" type="button" variant="ghost">
+                  <Button
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setSelectedTaskId(task.id)}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
                     <Split className="h-4 w-4" />
                     <span className="sr-only">Split task</span>
                   </Button>
                 ) : null}
-                <Button onClick={() => setSelectedTaskId(task.id)} size="icon" type="button" variant="ghost">
+                <Button
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => setSelectedTaskId(task.id)}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
                   <Pencil className="h-4 w-4" />
                   <span className="sr-only">Edit task</span>
                 </Button>

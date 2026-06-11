@@ -9,7 +9,7 @@ import {
   listPoolTasks,
   listTaskTree
 } from "@/services/queries";
-import { QuickAddForm } from "../components/quick-add-form";
+import { AppHeader } from "../components/app-header";
 import {
   PlanningCalendar,
   type CalendarBlockClient,
@@ -36,21 +36,16 @@ export default async function PlanPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="flex min-h-16 items-center gap-4 border-b bg-card px-5">
-        <div className="min-w-44">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Task Calendar</p>
-          <h1 className="text-xl font-semibold">Plan</h1>
-        </div>
-        <QuickAddForm />
-        <Button asChild variant={needsSplit.length > 0 ? "secondary" : "outline"}>
+      <AppHeader active="plan">
+        <Button asChild variant="outline">
           <Link href="/tasks">
             Needs split
-            <Badge className="ml-2" variant={needsSplit.length > 0 ? "destructive" : "outline"}>
+            <Badge variant={needsSplit.length > 0 ? "destructive" : "outline"}>
               {needsSplit.length}
             </Badge>
           </Link>
         </Button>
-      </header>
+      </AppHeader>
       <PlanningCalendar
         blocks={blocks.map(toCalendarBlockClient)}
         deadlineTasks={deadlineTasks.map(toDeadlineLaneTaskClient)}
