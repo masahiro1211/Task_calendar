@@ -6,6 +6,7 @@ import {
   createTaskService,
   type CreateBlockInput,
   type CreateTaskWithBlockInput,
+  type SplitTaskChildInput,
   type TaskSize,
   type UpdateBlockInput,
   type UpdateTaskInput
@@ -34,18 +35,42 @@ export async function createTaskAction(formData: FormData) {
   revalidatePlannerPaths();
 }
 
-export async function splitTaskAction(formData: FormData) {
-  await taskService().splitTask(requiredString(formData.get("parentId"), "parentId"), [
-    {
-      title: requiredString(formData.get("title"), "title"),
-      bodyMd: optionalString(formData.get("bodyMd")) ?? "",
-      deadline: optionalString(formData.get("deadline")),
-      estimateMin: optionalNumber(formData.get("estimateMin")),
-      size: taskSize(formData.get("size"))
-    }
-  ]);
+interface SplitChildPayload {
+  title: string;
+  size: string;
+  estimateMin?: number | string | null;
+  deadline?: string | null;
+}
 
+export async function splitTaskAction(parentId: string, children: SplitChildPayload[]) {
+  if (!parentId) {
+    throw new Error("parentId is required.");
+  }
+
+  const sanitized: SplitTaskChildInput[] = [];
+
+  for (const child of children) {
+    const title = typeof child.title === "string" ? child.title.trim() : "";
+
+    if (title === "") {
+      continue;
+    }
+
+    sanitized.push({
+      title,
+      size: childSize(child.size),
+      estimateMin: coerceOptionalNumber(child.estimateMin),
+      deadline: emptyToNull(child.deadline)
+    });
+  }
+
+  if (sanitized.length === 0) {
+    throw new Error("At least one child with a title is required.");
+  }
+
+  const created = await taskService().splitTask(parentId, sanitized);
   revalidatePlannerPaths();
+  return created;
 }
 
 export async function updateTaskAction(formData: FormData) {
@@ -141,6 +166,36 @@ function taskSize(value: FormDataEntryValue | null): TaskSize {
   }
 
   throw new Error("Invalid task size.");
+}
+
+function childSize(value: string): "M" | "S" {
+  if (value === "M" || value === "S") {
+    return value;
+  }
+
+  throw new Error("Child size must be M or S.");
+}
+
+function coerceOptionalNumber(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error("Expected a numeric value.");
+  }
+
+  return parsed;
+}
+
+function emptyToNull(value: string | null | undefined) {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+
+  return value.trim();
 }
 
 function revalidatePlannerPaths() {

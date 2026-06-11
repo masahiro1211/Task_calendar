@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Split } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -104,6 +104,12 @@ export function TaskTree({ tasks }: { tasks: TaskDetailClient[] }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {task.state === "open" ? (
+                  <Button onClick={() => setSelectedTaskId(task.id)} size="icon" type="button" variant="ghost">
+                    <Split className="h-4 w-4" />
+                    <span className="sr-only">Split task</span>
+                  </Button>
+                ) : null}
                 <Button onClick={() => setSelectedTaskId(task.id)} size="icon" type="button" variant="ghost">
                   <Pencil className="h-4 w-4" />
                   <span className="sr-only">Edit task</span>

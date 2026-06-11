@@ -19,9 +19,9 @@ import {
   listTaskBlocksAction,
   markTaskDoneAction,
   reopenTaskAction,
-  splitTaskAction,
   updateTaskAction
 } from "../actions";
+import { TaskSplit } from "./task-split";
 import type { TaskSize, TaskState } from "@/services/tasks";
 
 export interface TaskDetailClient {
@@ -67,7 +67,6 @@ export function TaskDetailSheet({
   const [blocks, setBlocks] = useState<TaskBlockClient[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(false);
   const [size, setSize] = useState<TaskSize>("M");
-  const [childSize, setChildSize] = useState<"M" | "S">("S");
 
   useEffect(() => {
     if (!task || !open) {
@@ -76,7 +75,6 @@ export function TaskDetailSheet({
     }
 
     setSize(task.size);
-    setChildSize("S");
     setLoadingBlocks(true);
     listTaskBlocksAction(task.id)
       .then((rows) =>
@@ -139,6 +137,12 @@ export function TaskDetailSheet({
         </SheetHeader>
 
         <div className="mt-6 grid gap-6">
+          {task.state === "open" ? (
+            <div className="border-b pb-6">
+              <TaskSplit onDone={() => onOpenChange(false)} parentId={task.id} />
+            </div>
+          ) : null}
+
           <form action={updateTaskAction} className="grid gap-3">
             <input name="taskId" type="hidden" value={task.id} />
             <input name="size" type="hidden" value={size} />
@@ -206,31 +210,6 @@ export function TaskDetailSheet({
               </form>
             ) : null}
           </div>
-
-          {task.state === "open" ? (
-            <form action={splitTaskAction} className="grid gap-3 border-t pt-4">
-              <input name="parentId" type="hidden" value={task.id} />
-              <input name="size" type="hidden" value={childSize} />
-              <h3 className="text-sm font-semibold">Split</h3>
-              <Input name="title" placeholder="Child task" required />
-              <div className="grid grid-cols-2 gap-3">
-                <Select onValueChange={(value) => setChildSize(value as "M" | "S")} value={childSize}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="M">M</SelectItem>
-                    <SelectItem value="S">S</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input min="1" name="estimateMin" placeholder="min" type="number" />
-              </div>
-              <Input name="deadline" type="date" />
-              <Button className="justify-self-start" type="submit" variant="outline">
-                Add child
-              </Button>
-            </form>
-          ) : null}
 
           <section className="grid gap-3 border-t pt-4">
             <div className="flex items-center justify-between">
