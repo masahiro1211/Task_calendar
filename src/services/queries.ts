@@ -173,14 +173,24 @@ export async function listTaskTree({
 
 export async function listPoolTasks() {
   const sql = getSql();
+  // v_pool と同じ定義だが、view の版数に依存しないよう条件をここに展開している
+  // (配置済み = ブロックを1つでも持つタスクはプールに出さない)
   const rows = await sql<PoolTaskRow[]>`
     select
-      id,
-      title,
-      size::text as size,
-      estimate_min,
-      effective_deadline::text as effective_deadline
-    from v_pool
+      t.id,
+      t.title,
+      t.size::text as size,
+      t.estimate_min,
+      t.effective_deadline::text as effective_deadline
+    from v_leaves t
+    where t.is_leaf
+      and t.state = 'open'
+      and t.size <> 'L'
+      and not exists (
+        select 1 from blocks b
+        where b.task_id = t.id
+      )
+    order by t.effective_deadline nulls last, t.size, t.sort_order
   `;
 
   return rows.map((row) => ({
